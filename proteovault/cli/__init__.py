@@ -1,0 +1,1 @@
+"""ProteoVault command-line interface."""

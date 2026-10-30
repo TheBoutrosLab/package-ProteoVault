@@ -27,10 +27,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Run tests
+      - name: Install package and test dependencies
         run: |
-          pip install tox
-          tox -e py${{matrix.python-version}}
+          python -m pip install -e '.[dev-dependencies]'
+
+      - name: Run tests
+        run: python -m pytest test --junitxml=junit/test-results.xml
 
       - name: Upload pytest test results
         uses: actions/upload-artifact@v7

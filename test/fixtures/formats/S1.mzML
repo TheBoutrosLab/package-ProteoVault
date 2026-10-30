@@ -1,0 +1,5 @@
+<mzML xmlns="http://psi.hupo.org/ms/mzml"><run><spectrumList>
+<spectrum id="scan=7"><cvParam accession="MS:1000511" value="2"/>
+<scanList><scan><cvParam accession="MS:1000016" value="2" unitAccession="UO:0000031"/></scan></scanList>
+<precursorList><precursor><selectedIonList><selectedIon><cvParam accession="MS:1000744" value="500"/></selectedIon></selectedIonList></precursor></precursorList>
+</spectrum></spectrumList></run></mzML>

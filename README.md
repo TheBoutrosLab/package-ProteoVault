@@ -1,23 +1,19 @@
-# Package Title
+# ProteoVault
 
-[![GitHub release](https://img.shields.io/github/v/release/TheBoutrosLab/template-python-package)](https://github.com/TheBoutrosLab/template-python-package/actions/workflows/prepare-release.yaml)
+ProteoVault stores linked proteomics results in a portable DuckDB database for analysis in R, Python, and SQL. It currently supports completed metapipeline-ProteomicDIA analyses.
 
-Template Repository for the Boutros Lab Python packages. Describe a simple overview of use/purpose here.
+## Documentation
 
-## Description
+Start with the [documentation overview](docs/index.md), then see:
 
-An in-depth paragraph about your project and overview of use.
+- [Installation](docs/installation.md)
+- [Container usage](docs/container.md)
+- [Command-line guide](docs/cli.md)
+- [Python interface](docs/python.md)
+- [R and SQL access](docs/analysis.md)
+- [Interpretation and current coverage](docs/interpretation.md)
+- [Database schema](docs/schema.md)
 
 ## License
 
-Author: Name1, Name2
-
-[This project] is licensed under the GNU General Public License version 2. See the file LICENSE.md for the terms of the GNU GPL license.
-
-<one line to give the project/program's name and a brief idea of what it does.>
-
-Copyright (C) 2026 Sanford Burnham Prebys Medical Discovery Institute ("Boutros Lab")
-
-This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+GNU GPL version 2 or later. Copyright 2026 Boutros Lab, Sanford Burnham Prebys Medical Discovery Institute.

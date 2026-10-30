@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<IdXML version="1.5"><IdentificationRun search_engine="MSFragger">
+<ProteinIdentification score_type="probability" higher_score_better="true">
+<ProteinHit id="PH_0" accession="P1" sequence="PEPTIDE" score="1" />
+<ProteinHit id="PH_1" accession="P2" score="1" />
+</ProteinIdentification>
+<PeptideIdentification score_type="q-value" higher_score_better="false" RT="12.5" MZ="500" spectrum_reference="scan=7">
+<PeptideHit sequence="PEPTIDE" charge="2" score="0.005" protein_refs="PH_0 PH_1"><UserParam name="target_decoy" value="target" /><UserParam name="expect" value="0.001" /><UserParam name="Posterior Error Probability_score" value="0.002" /></PeptideHit>
+</PeptideIdentification></IdentificationRun></IdXML>

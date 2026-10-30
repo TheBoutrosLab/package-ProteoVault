@@ -305,3 +305,8 @@ work/
 *.temp
 *.xlk
 *.~vsd*
+
+# Small, representative integration-test inputs
+!test/fixtures/**/*.fasta
+!test/fixtures/**/*.mzML
+!test/fixtures/**/*.idXML

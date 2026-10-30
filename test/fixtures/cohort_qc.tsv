@@ -1,0 +1,4 @@
+dataset_id	layer	source_process	sample_name	search_engine	fraction_id	metric_name	group	value	unit	status	source_file
+TEST	acquisition		S1			ms2_count	all	1200	count	available	S1.mzML
+TEST	raw_identification		S1	MSFragger		score_type	all	expect		available	S1.idXML
+TEST	protein_inference					group_count	all		count	unavailable	groups.idXML

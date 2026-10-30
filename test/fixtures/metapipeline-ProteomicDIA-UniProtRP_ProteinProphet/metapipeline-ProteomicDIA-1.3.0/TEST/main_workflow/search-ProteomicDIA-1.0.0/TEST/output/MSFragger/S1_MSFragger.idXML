@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<IdXML version="1.5"><IdentificationRun search_engine="MSFragger">
+<ProteinIdentification score_type="probability" higher_score_better="true">
+<ProteinHit id="PH_0" accession="P1" sequence="PEPTIDE" score="1"/>
+<ProteinHit id="PH_1" accession="P2" score="1"/>
+<UserParam name="protein_group_0" value="0.99,PH_0,PH_1" type="string"/>
+<UserParam name="indistinguishable_proteins_0" value="0.95,PH_0,PH_1" type="string"/>
+</ProteinIdentification>
+<PeptideIdentification score_type="hyperscore" higher_score_better="true" RT="12.5" MZ="500" spectrum_reference="scan=7">
+<PeptideHit sequence="PEPTIDE" charge="2" score="42" protein_refs="PH_0 PH_1"><UserParam name="target_decoy" value="target"/><UserParam name="expect" value="0.001"/></PeptideHit>
+</PeptideIdentification></IdentificationRun></IdXML>

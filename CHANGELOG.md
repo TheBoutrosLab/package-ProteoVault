@@ -1,37 +1,46 @@
 # Changelog
 
-All notable changes to the <repository>.
+All notable changes to ProteoVault are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-
-This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
+## [0.1.0] - 2026-10-30
 
 ### Added
 
-- For new features.
-- Add item 1.
+- `add-fasta` fills missing protein sequences in an existing vault from the search FASTA with atomic publication.
+
+- Optional `build --fasta` imports matching protein sequences from the search FASTA and records the source file.
+
+- Import the final merged cohort QC metrics TSV during build when present, or later with `add-layer --layer qc`.
+
+- Optional `quant-details` layer for the full DIA-NN precursor report.
+- Compact schema 1.0.0 with integer relationship IDs and lookup tables for repeated score, method, and stage labels.
+
+- Separate add-layer CLI and VaultLayerAdder for raw-search and MSBooster data, with dry runs, repeat-import skipping, and atomic publication.
+- Inspection reports the layers present in a database.
+
+- Timestamped CLI progress logging to stderr, preserving JSON-only stdout.
+
+- Public VaultBuilder, VaultValidator, and VaultInspector classes with separate CLI modules.
+- Atomic DuckDB builds with dry-run discovery and safe forced replacement.
+- Versioned schema for sources, samples/runs, spectra, PSM observations and scores/features, peptide forms, protein groups, and quantities.
+- DIA-NN matrix/report, OpenMS idXML, PIN, FASTA, and mzML metadata importers.
+- Published metapipeline-ProteomicDIA output discovery and source provenance.
+- Schema, relationship, quantity, and source-count validation; JSON inspection.
+- R query examples and integration tests for import fidelity and failure handling.
 
 ### Changed
 
-- For changes in existing functionality.
-- Change item 1.
+- `inspect` now prints readable tables by default; `--json` retains structured output.
 
-### Deprecated
+- Core builds now import the DIA-NN matrices only; full report quantities are added explicitly.
+- Remove foreign-key and redundant natural-key indexes; validate relationships and uniqueness during build.
+- Collapse equal PEP score aliases while preserving original source names.
 
-- For soon-to-be removed features.
+- Build now imports core quantification, FDR-filtered PSMs with confidence scores, and protein inference results; raw search and MSBooster feature data are opt-in.
 
-### Removed
-
-- For now removed features.
-- Remove item 1.
+- Cache repeated DIA-NN groups, precursors, channels, and mappings within bounded importer caches.
+- Use typed Arrow schemas and larger batches to reduce Python conversion and database insert overhead.
 
 ### Fixed
 
-- For any bug fixes.
-- Fix item 1.
-
-### Security
-
-- In case of vulnerabilities.
+- Allow pytest to import the local checkout without an editable package installation.

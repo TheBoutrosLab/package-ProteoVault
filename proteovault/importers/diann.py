@@ -53,13 +53,10 @@ class DIANNImporter(BaseImporter):
                 group_text = row["Protein.Group"]
                 if not group_text:
                     raise ValueError(f"{self.path}:{line}: empty Protein.Group")
-                group, members = self.group(group_text)
+                group = self.group(group_text)
                 precursor_id = None
                 if precursor:
                     precursor_id = self.precursor(row)
-                    self.map_precursor(
-                        precursor_id, row["Stripped.Sequence"], group, members
-                    )
                 row_key = precursor_id if precursor else group
                 if is_matrix:
                     if row_key in seen:
@@ -80,6 +77,10 @@ class DIANNImporter(BaseImporter):
                                 quantity=value,
                             )
                             self.counts["protein_quant"] += 1
+                    if precursor and any(
+                        self.number(row[column]) is not None for column in channels
+                    ):
+                        self.map_precursor(precursor_id, group)
                 else:
                     run = row["Run"]
                     if run not in self.channel_ids:
@@ -107,6 +108,15 @@ class DIANNImporter(BaseImporter):
                                 self.number(row.get("Q.Value")),
                                 self.number(row.get("PEP")),
                             )
+                    if any(
+                        self.number(row.get(column)) is not None
+                        for column in (
+                            "Precursor.Quantity",
+                            "Precursor.Normalised",
+                            "Precursor.Translated",
+                        )
+                    ):
+                        self.map_precursor(precursor_id, group)
                 if line % 5000 == 0:
                     self.database.flush()
         return self.record_counts()
@@ -117,7 +127,7 @@ class DIANNImporter(BaseImporter):
             group = self.database.group(self.source_id, text, members, "DIA-NN")
             if len(self.groups) >= 100000:
                 self.groups.clear()
-            self.groups[text] = (group, members)
+            self.groups[text] = group
         return self.groups[text]
 
     def precursor(self, row):
@@ -133,18 +143,11 @@ class DIANNImporter(BaseImporter):
             self.precursors[key] = precursor
         return self.precursors[key]
 
-    def map_precursor(self, precursor, sequence, group, members):
+    def map_precursor(self, precursor, group):
         key = (precursor, group)
         if key in self.mappings:
             return
         self.database.add("precursor_groups", precursor_id=precursor, group_id=group)
-        peptide = self.database.identity("peptide", sequence)
-        for accession in members:
-            self.database.add(
-                "peptide_proteins",
-                peptide_id=peptide,
-                protein_id=self.database.protein(accession),
-            )
         if len(self.mappings) >= 100000:
             self.mappings.clear()
         self.mappings.add(key)

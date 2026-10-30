@@ -23,6 +23,47 @@ TEST_FIXTURES = Path(__file__).parents[1] / "fixtures"
 
 
 class TestCoreBuild:
+    def test_identified_peptide_can_lack_quantitation(self, pipeline, tmp_path):
+        matrix = next(pipeline.rglob("*-report.pr_matrix.tsv"))
+        matrix.write_text(
+            matrix.read_text().replace(
+                "P1;P2\tPEPTIDE\tPEPTIDE\t2\t20\t",
+                "P1;P2\tPEPTIDE\tPEPTIDE\t2\t\t",
+            )
+        )
+        output = tmp_path / "unquantified.duckdb"
+        assert VaultBuilder(pipeline, output).build()["validation"]["valid"]
+        with duckdb.connect(str(output), read_only=True) as connection:
+            assert (
+                connection.execute("SELECT count(*) FROM peptide_proteins").fetchone()[0]
+                == 2
+            )
+            assert (
+                connection.execute("SELECT count(*) FROM psm_proteins").fetchone()[0]
+                == 2
+            )
+            assert (
+                connection.execute("SELECT count(*) FROM precursor_groups").fetchone()[0]
+                == 0
+            )
+
+    def test_quantitation_does_not_create_identification_evidence(
+        self, pipeline, tmp_path
+    ):
+        identification = next(pipeline.rglob("*_filter.idXML"))
+        identification.unlink()
+        output = tmp_path / "quantitation_only.duckdb"
+        assert VaultBuilder(pipeline, output).build()["validation"]["valid"]
+        with duckdb.connect(str(output), read_only=True) as connection:
+            assert (
+                connection.execute("SELECT count(*) FROM peptide_proteins").fetchone()[0]
+                == 0
+            )
+            assert (
+                connection.execute("SELECT count(*) FROM precursor_groups").fetchone()[0]
+                == 1
+            )
+
     def test_build_relations_and_nulls(self, pipeline, tmp_path):
         output = tmp_path / "results.duckdb"
         result = VaultBuilder(pipeline, output).build()

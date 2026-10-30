@@ -44,10 +44,10 @@ Unmodified sequence, modified sequence, and charged precursor are separate entit
 
 - `psms` represents one source-stage candidate observation. Join `psm_scores`, `psm_features`, and `psm_metadata` by psm_id. Main scores carry higher_better. Numeric hit metadata remains in psm_features; original metadata values are retained as strings.
 - `spectra` is unique by run_id/native_id. RT is in seconds for OpenMS idXML and mzML. DIA-NN report RT is not copied into this table because its scan/run association is not yet resolved.
-- `peptide_proteins` records the union of supplied sequence mappings. `psm_proteins` preserves which proteins were attached to each individual PSM observation. No inference assignment is manufactured from that mapping.
+- `peptide_proteins` records the union of identification-derived sequence mappings. `psm_proteins` preserves which proteins were attached to each individual PSM observation. DIA-NN quantitation does not create identification evidence or inference assignments.
 - `protein_groups` records source-specific groups. Inference probability remains in score with its supplied score_type. OpenMS protein_group and indistinguishable_proteins definitions are kept as different group_type values. Quantitative groups use method DIA-NN and group_type quantification.
 - `protein_group_members` permits multiple proteins per group. There is no implicit representative and no forced single-protein resolution.
-- `precursor_groups` links DIA-NN quantitative precursors to its reported groups. It is not a claim about ProteinProphet peptide assignment.
+- `precursor_groups` links DIA-NN precursors with a reported quantity to their quantitative groups. An identified peptide may have no quantitative group assignment. This link is not a claim about ProteinProphet peptide assignment.
 - `quant_channels` currently represents an LFQ measurement of a sample/run. This initial builder uses acquisition stems as sample names. Channel-level TMT and multifraction mapping are not implemented yet.
 - `protein_quant` is unique by group/channel/source/method. Protein quantities come from pg_matrix only, avoiding repeated PG.Quantity values on report precursor rows.
 - `precursor_quant` is unique by precursor/channel/source/method. Matrix, Precursor.Quantity, Precursor.Normalised, and Precursor.Translated values remain separate measurements. Values have the arbitrary intensity units supplied by DIA-NN.

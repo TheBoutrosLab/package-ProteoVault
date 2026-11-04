@@ -36,11 +36,15 @@ class VaultBuilder:
         output: str | Path,
         force: bool = False,
         fasta: str | Path | None = None,
+        uniprot_idmapping: str | Path | None = None,
     ):
         self.pipeline_output = Path(pipeline_output).expanduser().resolve()
         self.output = Path(output).expanduser().absolute()
         self.force = force
         self.fasta = Path(fasta).expanduser().resolve() if fasta else None
+        self.uniprot_idmapping = (
+            Path(uniprot_idmapping).expanduser().resolve() if uniprot_idmapping else None
+        )
 
     def plan(self) -> dict:
         if self.output.exists() and not self.force:
@@ -59,6 +63,20 @@ class VaultBuilder:
                     stage="reference",
                     sample_name=None,
                     relative_path=f"reference_fasta/{self.fasta.name}",
+                )
+            )
+        if self.uniprot_idmapping is not None:
+            if not self.uniprot_idmapping.is_file():
+                raise FileNotFoundError(
+                    f"UniProt ID mapping file does not exist: {self.uniprot_idmapping}"
+                )
+            plan["artifacts"].append(
+                dict(
+                    path=str(self.uniprot_idmapping),
+                    format="uniprot_idmapping",
+                    stage="annotation",
+                    sample_name=None,
+                    relative_path=f"uniprot_idmapping/{self.uniprot_idmapping.name}",
                 )
             )
         logger.info(
@@ -162,6 +180,11 @@ def add_parser(subparsers: _SubParsersAction[ArgumentParser]) -> None:
         help="Target-decoy FASTA used by the search; import sequences for identified proteins",
     )
     parser.add_argument(
+        "--uniprot-idmapping",
+        type=Path,
+        help="Local UniProt idmapping.gz archive for existing UniProt proteins",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Replace output only after a successful build",
@@ -180,6 +203,7 @@ def run(args: Namespace) -> int:
         args.output,
         force=args.force,
         fasta=args.fasta,
+        uniprot_idmapping=args.uniprot_idmapping,
     )
     result = builder.plan() if args.dry_run else builder.build()
     if args.dry_run:

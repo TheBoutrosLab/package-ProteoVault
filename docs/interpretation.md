@@ -15,4 +15,4 @@ See [the schema reference](schema.md) for table meanings and join rules.
 
 ## Schema version
 
-Schema 1.0.0 uses compact integer relationship IDs and lookup tables for repeated labels. Existing databases built with the earlier layout must be rebuilt; schema 1.0.0 now denotes the compact layout. Direct SQL users can query `psms_readable`, `psm_scores_readable`, `protein_groups_readable`, `protein_quant_readable`, and `precursor_quant_readable` for text labels.
+Schema 1.1.0 uses compact integer relationship IDs and lookup tables for repeated labels, and adds optional protein identifier cross-references. Existing databases built with the earlier layout must be rebuilt. Direct SQL users can query `psms_readable`, `psm_scores_readable`, `protein_groups_readable`, `protein_quant_readable`, and `precursor_quant_readable` for text labels.

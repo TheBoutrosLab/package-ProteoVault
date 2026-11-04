@@ -6,6 +6,8 @@ All notable changes to ProteoVault are documented here.
 
 ### Added
 
+- Import UniProt ID mapping archives into the provider-neutral `protein_identifiers` table during build or through `add-uniprot-idmapping` (schema 1.1.0).
+
 - Accept published `sample_name,path` quantitation manifests and require sample-level QC names to resolve to quantified samples.
 
 - Add `update-paths` to repair recorded source and QC paths after moving a result directory.

@@ -119,7 +119,7 @@ class VaultValidator:
                     )
                 for source_id, entity, expected in connection.execute(
                     "SELECT source_id,entity,row_count FROM import_counts "
-                    "WHERE entity IN ('psms','protein_quant','precursor_quant','pin_features','qc_metrics')"
+                    "WHERE entity IN ('psms','protein_quant','precursor_quant','pin_features','qc_metrics','protein_identifiers')"
                 ).fetchall():
                     actual_count = connection.execute(
                         f"SELECT count(*) FROM {entity} WHERE source_id=?", [source_id]
@@ -205,6 +205,8 @@ class VaultValidator:
             ("protein_groups", "source_id", "source_files", "source_id"),
             ("protein_group_members", "group_id", "protein_groups", "group_id"),
             ("protein_group_members", "protein_id", "proteins", "protein_id"),
+            ("protein_identifiers", "protein_id", "proteins", "protein_id"),
+            ("protein_identifiers", "source_id", "source_files", "source_id"),
             ("quant_channels", "sample_id", "samples", "sample_id"),
             ("quant_channels", "run_id", "runs", "run_id"),
             ("precursor_quant", "precursor_id", "precursors", "precursor_id"),

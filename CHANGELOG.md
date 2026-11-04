@@ -6,6 +6,8 @@ All notable changes to ProteoVault are documented here.
 
 ### Added
 
+- Import distinct DIA-NN report protein-group quantities from `PG.Quantity`, `PG.Normalised`, `PG.MaxLFQ`, and `PG.TopN` in the core layer when present, collapsing repeated precursor rows with conflict checks.
+
 - Add `update-paths` to repair recorded source and QC paths after moving a result directory.
 
 ## [0.1.0] - 2026-10-30

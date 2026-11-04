@@ -121,7 +121,7 @@ class TestCoreBuild:
                 == "validation"
             )
             assert connection.execute("SELECT count(*) FROM runs").fetchone()[0] == 2
-        assert len(VaultInspector(output).sources()) == 4
+        assert len(VaultInspector(output).sources()) == 5
 
     def test_force_failure_preserves_existing(self, pipeline, tmp_path):
         output = tmp_path / "results.duckdb"
@@ -184,6 +184,7 @@ class TestCoreBuild:
                     "Run",
                     "Precursor.Quantity",
                     "Precursor.Normalised",
+                    "PG.MaxLFQ",
                 ]
             )
             for sample in ("S1", "S2"):
@@ -191,7 +192,7 @@ class TestCoreBuild:
                     sequence = "PEP" + "".join(
                         alphabet[(index // (20**digit)) % 20] for digit in range(3)
                     )
-                    writer.writerow(["P1;P2", sequence, sequence, 2, sample, 10, 12])
+                    writer.writerow(["P1;P2", sequence, sequence, 2, sample, 10, 12, 100])
         output = tmp_path / "batched.duckdb"
         assert VaultBuilder(pipeline, output).build()["validation"]["valid"]
         VaultLayerAdder(output, ["quant-details"]).add()
@@ -201,3 +202,6 @@ class TestCoreBuild:
                 "FROM precursor_quant_readable WHERE method='Precursor.Quantity'"
             ).fetchone()
             assert (count, precursors, total) == (5200, 2600, 52000)
+            assert connection.execute(
+                "SELECT count(*) FROM protein_quant_readable WHERE method='PG.MaxLFQ'"
+            ).fetchone()[0] == 2

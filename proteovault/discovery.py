@@ -65,6 +65,7 @@ class PipelineOutputDiscovery:
             for pattern, format_name in [
                 ("*-report.pg_matrix.tsv", "diann_pg_matrix"),
                 ("*-report.pr_matrix.tsv", "diann_pr_matrix"),
+                ("*-report.tsv", "diann_pg_report"),
             ]:
                 matches = sorted(quant.glob(pattern))
                 if len(matches) > 1:
@@ -72,6 +73,8 @@ class PipelineOutputDiscovery:
                 artifacts.extend(
                     self.artifact(p, format_name, "quantitation") for p in matches
                 )
+                if format_name == "diann_pg_report" and not matches:
+                    warnings.append("No DIA-NN report protein quantities found")
             validation = self.child_pipeline(workflow, "validate-ProteomicPSM-*")
             if validation:
                 artifacts.extend(

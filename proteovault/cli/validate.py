@@ -84,7 +84,7 @@ class VaultValidator:
                     if total != unique:
                         errors.append(f"Duplicate or null keys in {table}")
                 for table, columns in (
-                    ("source_files", "path"),
+                    ("source_files", "path, format, stage"),
                     ("samples", "sample_name"),
                     ("runs", "run_name"),
                     ("spectra", "run_id, native_id"),

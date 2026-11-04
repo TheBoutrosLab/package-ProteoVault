@@ -17,7 +17,10 @@ class SourceManifest:
         relative = (
             artifact.get("relative_path") or path.relative_to(self.root).as_posix()
         )
-        key = database.identity("source", relative)
+        identity = ("source", relative)
+        if artifact["format"] == "diann_pg_report":
+            identity += ("protein_quant",)
+        key = database.identity(*identity)
         database.add(
             "source_files",
             source_id=key,

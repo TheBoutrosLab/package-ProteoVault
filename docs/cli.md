@@ -30,7 +30,7 @@ with no matching accessions fails the build, because this usually means that
 its identifiers or reference database do not match the search results. Without
 `--fasta`, full protein sequences are available only when supplied by idXML.
 
-The input directory must contain exactly one `metapipeline-ProteomicDIA-VERSION/DATASET/main_workflow` tree, or be the versioned directory itself. A published `quantitate-ProteomicDIA-*/DATASET/output/DIA-NN/*-report.pg_matrix.tsv` is required. The core also discovers published `*_filter.idXML` sample files and supported cohort inference idXML. It never falls back to unfiltered search PSMs. Missing core artifacts are reported as warnings. Ambiguous pipeline versions are rejected.
+The input directory must contain exactly one `metapipeline-ProteomicDIA-VERSION/DATASET/main_workflow` tree, or be the versioned directory itself. A published `quantitate-ProteomicDIA-*/DATASET/output/DIA-NN/*-report.pg_matrix.tsv` is required. Core also reads available protein-group quantities from `*-report.tsv`; detailed precursor quantities from that report remain optional. The core also discovers published `*_filter.idXML` sample files and supported cohort inference idXML. It never falls back to unfiltered search PSMs. Missing core artifacts are reported as warnings. Ambiguous pipeline versions are rejected.
 
 `inspect` prints aligned tables by default; use `inspect --json` for structured output. Other commands return JSON on stdout. Timestamped INFO progress logs and warnings go to stderr, covering discovery, file imports with record counts, validation, and completion. Errors go to stderr with exit status 1; malformed CLI arguments use status 2. `--dry-run` creates no files. `--force` replaces an existing database only after the new database imports and validates successfully. Build on a local filesystem with atomic file publication support, then copy the closed database to shared storage if needed.
 
@@ -48,8 +48,8 @@ After moving the versioned result directory, run `update-paths` with its new loc
 
 | Layer | Contents |
 | --- | --- |
-| `core` (default build) | Quantification matrices, FDR-filtered PSMs with q-values/PEPs, inference groups |
-| `quant-details` | Full DIA-NN precursor report, including original, normalized, and translated quantities |
+| `core` (default build) | Quantification matrices, available `PG.Quantity`, `PG.Normalised`, `PG.MaxLFQ`, and `PG.TopN` report quantities, FDR-filtered PSMs with q-values/PEPs, inference groups |
+| `quant-details` | Detailed DIA-NN report precursor quantities: original, normalized, and translated |
 | `raw-search` | Raw search idXML, including its PSM metadata and numeric features |
 | `msbooster` | Edited MSBooster PIN features |
 | `qc` | Final merged `<dataset>_QC_metrics.tsv` from qc-ProteomicDIA |

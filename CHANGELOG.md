@@ -2,6 +2,12 @@
 
 All notable changes to ProteoVault are documented here.
 
+## [Unreleased] - 2026-11-04
+
+### Added
+
+- Add `update-paths` to repair recorded source and QC paths after moving a result directory.
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

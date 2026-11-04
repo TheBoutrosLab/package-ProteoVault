@@ -16,6 +16,7 @@ proteovault add-layer /path/to/results.proteovault.duckdb --layer raw-search
 proteovault add-layer /path/to/results.proteovault.duckdb --layer msbooster
 proteovault add-layer /path/to/results.proteovault.duckdb --layer qc
 proteovault add-fasta /path/to/results.proteovault.duckdb --fasta /path/to/search.fasta
+proteovault update-paths /path/to/results.proteovault.duckdb --pipeline-output /new/path/to/metapipeline-ProteomicDIA-VERSION
 
 proteovault validate /path/to/results.proteovault.duckdb
 proteovault inspect /path/to/results.proteovault.duckdb
@@ -42,6 +43,8 @@ missing sequences. An unchanged FASTA that was already imported is skipped;
 a different reference FASTA requires a rebuild.
 
 `add-layer` uses the pipeline output directory recorded in the database. Pass `--pipeline-output /new/path` after relocating it. Repeat `--layer` to add multiple layers together; `--dry-run` previews the files. Already imported, unchanged files are skipped. Changed previously imported files require a rebuild. Layers must belong to the same dataset and metapipeline version. The command imports into a temporary copy, validates it, and replaces the original only after success. `inspect` reports which layers are present. A QC table published after the core build can be added with `--layer qc`.
+
+After moving the versioned result directory, run `update-paths` with its new location. It updates the analysis root, imported source paths, and QC provenance paths inside the old root. It also updates a FASTA stored inside the moved result tree; use `--fasta /new/path/search.fasta` when a separate FASTA moved. External input paths outside the result tree are left as recorded. Use `--dry-run` to preview source changes. The command checks source files and validates a temporary database copy before replacing the original.
 
 | Layer | Contents |
 | --- | --- |

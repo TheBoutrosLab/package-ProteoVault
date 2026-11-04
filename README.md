@@ -2,6 +2,8 @@
 
 ProteoVault stores linked proteomics results in a portable DuckDB database for analysis in R, Python, and SQL. It currently supports completed metapipeline-ProteomicDIA analyses.
 
+Use `proteovault update-paths` to repair recorded source paths after moving a completed analysis; see the command-line guide for options and validation behavior.
+
 ## Documentation
 
 Start with the [documentation overview](docs/index.md), then see:

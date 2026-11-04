@@ -32,6 +32,8 @@ its identifiers or reference database do not match the search results. Without
 
 The input directory must contain exactly one `metapipeline-ProteomicDIA-VERSION/DATASET/main_workflow` tree, or be the versioned directory itself. A published `quantitate-ProteomicDIA-*/DATASET/output/DIA-NN/*-report.pg_matrix.tsv` is required. The core also discovers published `*_filter.idXML` sample files and supported cohort inference idXML. It never falls back to unfiltered search PSMs. Missing core artifacts are reported as warnings. Ambiguous pipeline versions are rejected.
 
+When `manifests/quantitation.csv` is present, its `sample_name,path` rows map DIA-NN acquisition names to biological sample names throughout quantification and QC; the older `sample_name,mzML` header is also accepted. Unknown or ambiguous names fail the import. Sample-level QC names must match quantified samples, while empty cohort-level QC names remain empty. Rebuild an existing vault to correct sample identities already stored in it.
+
 `inspect` prints aligned tables by default; use `inspect --json` for structured output. Other commands return JSON on stdout. Timestamped INFO progress logs and warnings go to stderr, covering discovery, file imports with record counts, validation, and completion. Errors go to stderr with exit status 1; malformed CLI arguments use status 2. `--dry-run` creates no files. `--force` replaces an existing database only after the new database imports and validates successfully. Build on a local filesystem with atomic file publication support, then copy the closed database to shared storage if needed.
 
 `add-fasta` adds protein sequences to an existing vault without rebuilding it.

@@ -6,6 +6,8 @@ All notable changes to ProteoVault are documented here.
 
 ### Added
 
+- Accept published `sample_name,path` quantitation manifests and require sample-level QC names to resolve to quantified samples.
+
 - Add `update-paths` to repair recorded source and QC paths after moving a result directory.
 
 ## [0.1.0] - 2026-10-30

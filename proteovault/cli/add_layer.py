@@ -60,10 +60,14 @@ class VaultLayerAdder:
                 "SELECT dataset_id,pipeline,pipeline_version,root_path FROM analysis"
             ).fetchone()
             known = {
-                relative: (size, mtime, format_name, stage)
+                (relative, format_name, stage): (size, mtime)
                 for relative, size, mtime, format_name, stage in database.connection.execute(
                     "SELECT relative_path,size_bytes,mtime_ns,format,stage FROM source_files"
                 ).fetchall()
+            }
+            known_paths = {
+                relative: (size, mtime)
+                for (relative, _format, _stage), (size, mtime) in known.items()
             }
         root = self.pipeline_output or Path(row[3])
         discovery = PipelineOutputDiscovery(root)
@@ -91,17 +95,13 @@ class VaultLayerAdder:
                 path = Path(artifact["path"])
                 relative = path.relative_to(source_root).as_posix()
                 stat = path.stat()
-                if relative in known:
-                    expected = (
-                        stat.st_size,
-                        stat.st_mtime_ns,
-                        artifact["format"],
-                        artifact["stage"],
+                expected = (stat.st_size, stat.st_mtime_ns)
+                if relative in known_paths and known_paths[relative] != expected:
+                    raise ValueError(
+                        f"Previously imported source changed: {path}; rebuild the database"
                     )
-                    if known[relative] != expected:
-                        raise ValueError(
-                            f"Previously imported source changed: {path}; rebuild the database"
-                        )
+                key = (relative, artifact["format"], artifact["stage"])
+                if key in known:
                     skipped.append(artifact)
                 else:
                     artifacts.append(artifact)

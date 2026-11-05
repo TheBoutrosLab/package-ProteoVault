@@ -8,6 +8,7 @@ from proteovault.importers.fasta import FASTAImporter
 from proteovault.importers.idxml import IdXMLImporter
 from proteovault.importers.pin import PINImporter
 from proteovault.importers.qc import QCImporter
+from proteovault.importers.uniprot_idmapping import UniProtIdMappingImporter
 from proteovault.manifest import SourceManifest
 from proteovault.discovery import PipelineOutputDiscovery
 from proteovault.sample_manifest import SampleManifest
@@ -71,5 +72,6 @@ class ImportCoordinator:
             "idxml": IdXMLImporter,
             "pin": PINImporter,
             "qc_metrics": QCImporter,
+            "uniprot_idmapping": UniProtIdMappingImporter,
             "fasta": FASTAImporter,
         }[format_name]

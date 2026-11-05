@@ -133,7 +133,7 @@ class TestOptionalLayers:
                 connection.execute(
                     "SELECT value FROM metadata WHERE key='schema_version'"
                 ).fetchone()[0]
-                == "1.0.0"
+                == "1.1.0"
             )
             assert (
                 connection.execute(

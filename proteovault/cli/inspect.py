@@ -46,6 +46,7 @@ class VaultInspector:
             "MSBooster": "msbooster",
             "qc": "qc",
             "reference": "fasta",
+            "annotation": "uniprot-idmapping",
         }
         summary["layers"] = sorted(
             {

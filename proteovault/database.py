@@ -131,6 +131,7 @@ class ProteoVaultDatabase:
             "psm_features",
             "psm_metadata",
             "proteins",
+            "protein_identifiers",
             "peptide_proteins",
             "psm_proteins",
             "protein_groups",

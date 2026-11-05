@@ -27,6 +27,13 @@ class QCImporter(BaseImporter):
         dataset = self.database.connection.execute(
             "SELECT dataset_id FROM analysis"
         ).fetchall()[0][0]
+        self.database.flush()
+        quantified_samples = {
+            name for (name,) in self.database.connection.execute(
+                "SELECT DISTINCT s.sample_name FROM quant_channels c "
+                "JOIN samples s USING(sample_id)"
+            ).fetchall()
+        }
         self.counts = {"qc_metrics": 0}
         with self.path.open(encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
@@ -54,6 +61,17 @@ class QCImporter(BaseImporter):
                     raise ValueError(
                         f"{self.path}: row {row_number} has no available value"
                     )
+                sample_name = (
+                    self.database.sample_manifest.sample_name(row["sample_name"])
+                    if row["sample_name"] and self.database.sample_manifest
+                    else row["sample_name"]
+                )
+                if sample_name and sample_name not in quantified_samples:
+                    raise ValueError(
+                        f"{self.path}: row {row_number} QC sample {row['sample_name']!r} "
+                        "does not match a quantified sample; provide a matching "
+                        "manifests/quantitation.csv"
+                    )
                 self.database.add(
                     "qc_metrics",
                     source_id=self.source_id,
@@ -61,11 +79,7 @@ class QCImporter(BaseImporter):
                     dataset_id=row["dataset_id"],
                     layer=row["layer"],
                     source_process=row["source_process"],
-                    sample_name=(
-                        self.database.sample_manifest.sample_name(row["sample_name"])
-                        if row["sample_name"] and self.database.sample_manifest
-                        else row["sample_name"]
-                    ),
+                    sample_name=sample_name,
                     search_engine=row["search_engine"],
                     fraction_id=row["fraction_id"],
                     metric_name=row["metric_name"],

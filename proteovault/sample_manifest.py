@@ -14,18 +14,20 @@ class SampleManifest:
         self.samples = set()
         with self.path.open(encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle)
-            if reader.fieldnames != ["sample_name", "mzML"]:
+            if reader.fieldnames not in (["sample_name", "path"], ["sample_name", "mzML"]):
                 raise ValueError(
-                    f"Unexpected quantitation manifest columns: {self.path}"
+                    f"Unexpected quantitation manifest columns in {self.path}; "
+                    "expected sample_name,path or sample_name,mzML"
                 )
+            path_column = reader.fieldnames[1]
             for line, row in enumerate(reader, start=2):
-                sample = row["sample_name"].strip()
-                mzml = row["mzML"].strip()
-                if not sample or not mzml:
+                sample = (row["sample_name"] or "").strip()
+                acquisition = (row[path_column] or "").strip()
+                if not sample or not acquisition:
                     raise ValueError(
                         f"Incomplete quantitation manifest row: {self.path}:{line}"
                     )
-                normalized = mzml.replace("\\", "/")
+                normalized = acquisition.replace("\\", "/")
                 stem = Path(normalized).name
                 for suffix in (".mzML", ".raw", ".d"):
                     if stem.lower().endswith(suffix.lower()):
@@ -33,7 +35,7 @@ class SampleManifest:
                         break
                 if normalized in self.by_path and self.by_path[normalized] != sample:
                     raise ValueError(
-                        f"Conflicting sample names for {mzml}: {self.path}"
+                        f"Conflicting sample names for {acquisition}: {self.path}"
                     )
                 self.by_path[normalized] = sample
                 self.by_stem.setdefault(stem, set()).add(sample)

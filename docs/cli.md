@@ -16,6 +16,7 @@ proteovault add-layer /path/to/results.proteovault.duckdb --layer raw-search
 proteovault add-layer /path/to/results.proteovault.duckdb --layer msbooster
 proteovault add-layer /path/to/results.proteovault.duckdb --layer qc
 proteovault add-fasta /path/to/results.proteovault.duckdb --fasta /path/to/search.fasta
+proteovault add-uniprot-idmapping /path/to/results.proteovault.duckdb --mapping /path/to/UP000005640_9606.idmapping.gz
 proteovault update-paths /path/to/results.proteovault.duckdb --pipeline-output /new/path/to/metapipeline-ProteomicDIA-VERSION
 
 proteovault validate /path/to/results.proteovault.duckdb
@@ -32,6 +33,8 @@ its identifiers or reference database do not match the search results. Without
 
 The input directory must contain exactly one `metapipeline-ProteomicDIA-VERSION/DATASET/main_workflow` tree, or be the versioned directory itself. A published `quantitate-ProteomicDIA-*/DATASET/output/DIA-NN/*-report.pg_matrix.tsv` is required. Core also reads available protein-group quantities from `*-report.tsv`; detailed precursor quantities from that report remain optional. The core also discovers published `*_filter.idXML` sample files and supported cohort inference idXML. It never falls back to unfiltered search PSMs. Missing core artifacts are reported as warnings. Ambiguous pipeline versions are rejected.
 
+When `manifests/quantitation.csv` is present, its `sample_name,path` rows map DIA-NN acquisition names to biological sample names throughout quantification and QC; the older `sample_name,mzML` header is also accepted. Unknown or ambiguous names fail the import. Sample-level QC names must match quantified samples, while empty cohort-level QC names remain empty. Rebuild an existing vault to correct sample identities already stored in it.
+
 `inspect` prints aligned tables by default; use `inspect --json` for structured output. Other commands return JSON on stdout. Timestamped INFO progress logs and warnings go to stderr, covering discovery, file imports with record counts, validation, and completion. Errors go to stderr with exit status 1; malformed CLI arguments use status 2. `--dry-run` creates no files. `--force` replaces an existing database only after the new database imports and validates successfully. Build on a local filesystem with atomic file publication support, then copy the closed database to shared storage if needed.
 
 `add-fasta` adds protein sequences to an existing vault without rebuilding it.
@@ -41,6 +44,14 @@ copies the database to a temporary file, validates the updated copy, and then
 replaces the original. Use `--dry-run` to check the number of proteins currently
 missing sequences. An unchanged FASTA that was already imported is skipped;
 a different reference FASTA requires a rebuild.
+
+Use `build --uniprot-idmapping /path/to/file.idmapping.gz` or
+`add-uniprot-idmapping` to import a local UniProt three-column mapping archive.
+Only proteins with explicit UniProt FASTA identifiers are matched, and every
+mapping type and value is retained in `protein_identifiers` with source
+provenance. The original protein accession is unchanged. `add-uniprot-idmapping`
+validates a temporary database copy before replacing the original; an unchanged
+archive already imported is skipped. The command requires schema 1.1.0.
 
 `add-layer` uses the pipeline output directory recorded in the database. Pass `--pipeline-output /new/path` after relocating it. Repeat `--layer` to add multiple layers together; `--dry-run` previews the files. Already imported, unchanged files are skipped. Changed previously imported files require a rebuild. Layers must belong to the same dataset and metapipeline version. The command imports into a temporary copy, validates it, and replaces the original only after success. `inspect` reports which layers are present. A QC table published after the core build can be added with `--layer qc`.
 
@@ -53,3 +64,4 @@ After moving the versioned result directory, run `update-paths` with its new loc
 | `raw-search` | Raw search idXML, including its PSM metadata and numeric features |
 | `msbooster` | Edited MSBooster PIN features |
 | `qc` | Final merged `<dataset>_QC_metrics.tsv` from qc-ProteomicDIA |
+| `uniprot-idmapping` | Protein identifier cross-references from a local UniProt archive |

@@ -1,4 +1,4 @@
-# ProteoVault schema 1.0.0
+# ProteoVault schema 1.1.0
 
 This initial schema stores one analysis per database. Metadata records its producer version, schema version, creation time, and import warnings. It is an initial contract; future incompatible layouts require a new schema version. The reader validates the version before accepting it.
 
@@ -28,6 +28,7 @@ Unmodified sequence, modified sequence, and charged precursor are separate entit
 - **`protein_quant`**: `group_id, channel_id, source_id, method_id, quantity`.
 - **`protein_quant_long`**: `sample_name, group_id, source_group_id, grouping_method, quantification_method, quantity, source_id`.
 - **`proteins`**: `protein_id, accession, sequence, description, is_decoy, is_contaminant`.
+- **`protein_identifiers`**: `protein_id, source_id, source_accession, mapping_type, mapped_id`.
 - **`psm_features`**: `psm_id, name, value`.
 - **`psm_metadata`**: `psm_id, name, value`.
 - **`psm_proteins`**: `psm_id, protein_id`.
@@ -48,8 +49,9 @@ Unmodified sequence, modified sequence, and charged precursor are separate entit
 - `protein_groups` records source-specific groups. Inference probability remains in score with its supplied score_type. OpenMS protein_group and indistinguishable_proteins definitions are kept as different group_type values. Quantitative groups use method DIA-NN and group_type quantification.
 - `protein_group_members` permits multiple proteins per group. There is no implicit representative and no forced single-protein resolution.
 - `precursor_groups` links DIA-NN precursors with a reported quantity to their quantitative groups. An identified peptide may have no quantitative group assignment. This link is not a claim about ProteinProphet peptide assignment.
-- `quant_channels` currently represents an LFQ measurement of a sample/run. This initial builder uses acquisition stems as sample names. Channel-level TMT and multifraction mapping are not implemented yet.
+- `quant_channels` currently represents an LFQ measurement of a sample/run. A published `manifests/quantitation.csv` maps acquisitions to canonical sample names; without it, acquisition stems are used. Sample-level QC names must resolve to a quantified sample. Channel-level TMT and multifraction mapping are not implemented yet.
 - `protein_quant` is unique by group/channel/source/method. The core imports `pg_matrix` as method `matrix` and available `PG.Quantity`, `PG.Normalised`, `PG.MaxLFQ`, and `PG.TopN` report columns under their original method names. Repeated precursor rows contribute only one value per group/run/method; conflicting nonmissing values reject the import. Matrix and report values remain distinct. The same report file has separate source records for its core protein and optional precursor imports.
+- `protein_identifiers` stores one row per protein, source archive, mapping type, and mapped identifier. A UniProt idmapping archive may supply several values of the same type. The original `proteins.accession` remains unchanged. Only proteins with explicit `sp|accession|entry` or `tr|accession|entry` identifiers are matched; decoys, contaminants, and other identifier formats are skipped.
 - `precursor_quant` is unique by precursor/channel/source/method. Matrix, Precursor.Quantity, Precursor.Normalised, and Precursor.Translated values remain separate measurements. Values have the arbitrary intensity units supplied by DIA-NN.
 - `pin_features` is deliberately source-row based. SpecId and ScanNr are retained without an unverified PSM link. Numeric PIN features can be queried immediately; a future exact bridge can link them when source identifiers support it.
 - `import_counts` records expected imported PSM/quantity/feature counts per source. Validation compares these with database counts.

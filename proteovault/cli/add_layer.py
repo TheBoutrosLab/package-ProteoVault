@@ -39,11 +39,11 @@ class VaultLayerAdder:
             Path(pipeline_output).expanduser().resolve() if pipeline_output else None
         )
         if not self.layers or any(
-            layer not in ("quant-details", "raw-search", "msbooster", "qc")
+            layer not in ("raw-search", "msbooster", "qc")
             for layer in self.layers
         ):
             raise ValueError(
-                "Choose at least one optional layer: quant-details, raw-search, msbooster, qc"
+                "Choose at least one optional layer: raw-search, msbooster, qc"
             )
 
     def plan(self) -> dict:
@@ -192,7 +192,7 @@ def add_parser(subparsers: _SubParsersAction[ArgumentParser]) -> None:
     parser.add_argument("database", type=Path)
     parser.add_argument(
         "--layer",
-        choices=("quant-details", "raw-search", "msbooster", "qc"),
+        choices=("raw-search", "msbooster", "qc"),
         action="append",
         required=True,
         help="Optional layer to import; repeat to select multiple layers",

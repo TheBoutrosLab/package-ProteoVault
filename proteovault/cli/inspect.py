@@ -39,7 +39,6 @@ class VaultInspector:
 
         stage_layers = {
             "quantitation": "core",
-            "quant-details": "quant-details",
             "validation": "core",
             "inference": "core",
             "search": "raw-search",

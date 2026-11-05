@@ -48,11 +48,9 @@ class TestOptionalLayers:
         report = next(pipeline.rglob("*-report.tsv"))
         report.write_text(report.read_text().replace("0.005", "1.1"))
         output = tmp_path / "invalid.duckdb"
-        VaultBuilder(pipeline, output).build()
-        before = output.read_bytes()
         with pytest.raises(ValueError, match="invalid confidence"):
-            VaultLayerAdder(output, ["quant-details"]).add()
-        assert output.read_bytes() == before
+            VaultBuilder(pipeline, output).build()
+        assert not output.exists()
 
     def test_optional_sources_are_not_read_by_core_build(self, pipeline, tmp_path):
         source = next(pipeline.rglob("S1_MSFragger.idXML"))
@@ -123,11 +121,11 @@ class TestOptionalLayers:
             "raw-search",
         ]
 
-    def test_compact_schema_and_quant_details_layer(self, pipeline, tmp_path):
+    def test_compact_schema_and_report_quantities_in_core(self, pipeline, tmp_path):
         output = tmp_path / "compact.duckdb"
         built = VaultBuilder(pipeline, output).build()
         assert built["validation"]["valid"]
-        assert built["table_counts"]["precursor_quant"] == 2
+        assert built["table_counts"]["precursor_quant"] == 4
         with duckdb.connect(str(output), read_only=True) as connection:
             assert (
                 connection.execute(
@@ -154,8 +152,5 @@ class TestOptionalLayers:
                 ).fetchone()[0]
                 == 2
             )
-        added = VaultLayerAdder(output, ["quant-details"]).add()
-        assert added["validation"]["valid"]
-        assert added["table_counts"]["precursor_quant"] == 4
-        assert VaultLayerAdder(output, ["quant-details"]).add()["imported_files"] == 0
-        assert "quant-details" in VaultInspector(output).summary()["layers"]
+        assert VaultInspector(output).summary()["table_counts"]["precursor_quant"] == 4
+        assert VaultInspector(output).summary()["layers"] == ["core"]

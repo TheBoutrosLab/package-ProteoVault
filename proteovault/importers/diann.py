@@ -18,9 +18,7 @@ class DIANNImporter(BaseImporter):
             if "Protein.Group" not in fields:
                 raise ValueError(f"Missing Protein.Group column: {self.path}")
             is_matrix = self.path.name.endswith((".pg_matrix.tsv", ".pr_matrix.tsv"))
-            precursor = self.path.name.endswith(".pr_matrix.tsv") or (
-                not is_matrix and self.stage == "quant-details"
-            )
+            precursor = self.path.name.endswith(".pr_matrix.tsv") or not is_matrix
             if precursor:
                 required = {
                     "Modified.Sequence",

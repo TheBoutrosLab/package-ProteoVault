@@ -11,7 +11,6 @@ proteovault build \
     --fasta /path/to/the-search-target-decoy.fasta \
     --output /path/to/results.proteovault.duckdb
 
-proteovault add-layer /path/to/results.proteovault.duckdb --layer quant-details
 proteovault add-layer /path/to/results.proteovault.duckdb --layer raw-search
 proteovault add-layer /path/to/results.proteovault.duckdb --layer msbooster
 proteovault add-layer /path/to/results.proteovault.duckdb --layer qc
@@ -31,7 +30,7 @@ with no matching accessions fails the build, because this usually means that
 its identifiers or reference database do not match the search results. Without
 `--fasta`, full protein sequences are available only when supplied by idXML.
 
-The input directory must contain exactly one `metapipeline-ProteomicDIA-VERSION/DATASET/main_workflow` tree, or be the versioned directory itself. A published `quantitate-ProteomicDIA-*/DATASET/output/DIA-NN/*-report.pg_matrix.tsv` is required. Core also reads available protein-group quantities from `*-report.tsv`; detailed precursor quantities from that report remain optional. The core also discovers published `*_filter.idXML` sample files and supported cohort inference idXML. It never falls back to unfiltered search PSMs. Missing core artifacts are reported as warnings. Ambiguous pipeline versions are rejected.
+The input directory must contain exactly one `metapipeline-ProteomicDIA-VERSION/DATASET/main_workflow` tree, or be the versioned directory itself. A published `quantitate-ProteomicDIA-*/DATASET/output/DIA-NN/*-report.pg_matrix.tsv` is required. Core also reads available protein-group and precursor quantities from `*-report.tsv`. The core also discovers published `*_filter.idXML` sample files and supported cohort inference idXML. It never falls back to unfiltered search PSMs. Missing core artifacts are reported as warnings. Ambiguous pipeline versions are rejected.
 
 When `manifests/quantitation.csv` is present, its `sample_name,path` rows map DIA-NN acquisition names to biological sample names throughout quantification and QC; the older `sample_name,mzML` header is also accepted. Unknown or ambiguous names fail the import. Sample-level QC names must match quantified samples, while empty cohort-level QC names remain empty. Rebuild an existing vault to correct sample identities already stored in it.
 
@@ -59,8 +58,7 @@ After moving the versioned result directory, run `update-paths` with its new loc
 
 | Layer | Contents |
 | --- | --- |
-| `core` (default build) | Quantification matrices, available `PG.Quantity`, `PG.Normalised`, `PG.MaxLFQ`, and `PG.TopN` report quantities, FDR-filtered PSMs with q-values/PEPs, inference groups |
-| `quant-details` | Detailed DIA-NN report precursor quantities: original, normalized, and translated |
+| `core` (default build) | Quantification matrices, available `PG.Quantity`, `PG.Normalised`, `PG.MaxLFQ`, `PG.TopN`, `Precursor.Quantity`, `Precursor.Normalised`, and `Precursor.Translated` report quantities, FDR-filtered PSMs with q-values/PEPs, inference groups |
 | `raw-search` | Raw search idXML, including its PSM metadata and numeric features |
 | `msbooster` | Edited MSBooster PIN features |
 | `qc` | Final merged `<dataset>_QC_metrics.tsv` from qc-ProteomicDIA |

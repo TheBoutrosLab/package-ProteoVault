@@ -31,6 +31,10 @@ class TestCoreBuild:
                 "P1;P2\tPEPTIDE\tPEPTIDE\t2\t\t",
             )
         )
+        report = next(pipeline.rglob("*-report.tsv"))
+        report.write_text(report.read_text().replace(
+            "\tS1\t19\t20\t", "\tS1\t\t\t"
+        ))
         output = tmp_path / "unquantified.duckdb"
         assert VaultBuilder(pipeline, output).build()["validation"]["valid"]
         with duckdb.connect(str(output), read_only=True) as connection:
@@ -61,7 +65,7 @@ class TestCoreBuild:
             )
             assert (
                 connection.execute("SELECT count(*) FROM precursor_groups").fetchone()[0]
-                == 1
+                == 2
             )
 
     def test_build_relations_and_nulls(self, pipeline, tmp_path):
@@ -90,7 +94,7 @@ class TestCoreBuild:
                 connection.execute(
                     "SELECT count(*) FROM protein_group_members"
                 ).fetchone()[0]
-                == 9
+                == 11
             )
             assert (
                 connection.execute("SELECT count(*) FROM psm_proteins").fetchone()[0]
@@ -195,7 +199,6 @@ class TestCoreBuild:
                     writer.writerow(["P1;P2", sequence, sequence, 2, sample, 10, 12, 100])
         output = tmp_path / "batched.duckdb"
         assert VaultBuilder(pipeline, output).build()["validation"]["valid"]
-        VaultLayerAdder(output, ["quant-details"]).add()
         with duckdb.connect(str(output), read_only=True) as connection:
             count, precursors, total = connection.execute(
                 "SELECT count(*),count(DISTINCT precursor_id),sum(quantity) "

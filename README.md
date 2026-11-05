@@ -2,7 +2,7 @@
 
 ProteoVault stores linked proteomics results in a portable DuckDB database for analysis in R, Python, and SQL. It currently supports completed metapipeline-ProteomicDIA analyses.
 
-Core builds retain available DIA-NN protein-group quantities from both the protein matrix and the detailed report; detailed precursor report quantities remain optional through `add-layer --layer quant-details`.
+Core builds retain available DIA-NN protein-group and precursor quantities from both the matrices and the detailed report.
 
 Use `proteovault update-paths` to repair recorded source paths after moving a completed analysis; see the command-line guide for options and validation behavior.
 

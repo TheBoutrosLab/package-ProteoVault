@@ -57,7 +57,6 @@ class TestSampleMapping:
             assert connection.execute(
                 "SELECT count(*) FROM qc_metrics WHERE sample_name = ''"
             ).fetchone()[0] == 1
-        VaultLayerAdder(output, ["quant-details"]).add()
         with duckdb.connect(str(output), read_only=True) as connection:
             assert connection.execute(
                 "SELECT sample_name FROM precursor_quant_long "

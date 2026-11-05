@@ -24,7 +24,7 @@ All notable changes to ProteoVault are documented here.
 
 - Import the final merged cohort QC metrics TSV during build when present, or later with `add-layer --layer qc`.
 
-- Optional `quant-details` layer for the full DIA-NN precursor report.
+- Core import of available DIA-NN report precursor quantities and confidence values.
 - Compact schema 1.0.0 with integer relationship IDs and lookup tables for repeated score, method, and stage labels.
 
 - Separate add-layer CLI and VaultLayerAdder for raw-search and MSBooster data, with dry runs, repeat-import skipping, and atomic publication.

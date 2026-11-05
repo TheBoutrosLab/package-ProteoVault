@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 import duckdb
 
-from proteovault.cli import add_fasta, add_layer, build, inspect, update_paths, validate
+from proteovault.cli import add_fasta, add_layer, add_uniprot_idmapping, build, inspect, update_paths, validate
 from proteovault.version import __version__
 
 
@@ -17,7 +17,7 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in (build, add_layer, add_fasta, update_paths, validate, inspect):
+    for command in (build, add_layer, add_fasta, add_uniprot_idmapping, update_paths, validate, inspect):
         command.add_parser(commands)
     args = parser.parse_args(argv)
     logger = logging.getLogger("proteovault")

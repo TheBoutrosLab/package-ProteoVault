@@ -39,13 +39,13 @@ class VaultInspector:
 
         stage_layers = {
             "quantitation": "core",
-            "quant-details": "quant-details",
             "validation": "core",
             "inference": "core",
             "search": "raw-search",
             "MSBooster": "msbooster",
             "qc": "qc",
             "reference": "fasta",
+            "annotation": "uniprot-idmapping",
         }
         summary["layers"] = sorted(
             {

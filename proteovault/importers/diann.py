@@ -34,8 +34,15 @@ class DIANNImporter(BaseImporter):
             ]
             if is_matrix and not channels:
                 raise ValueError(f"No sample columns in {self.path}")
-            if not is_matrix and not {"Run", "Precursor.Quantity"}.issubset(fields):
-                raise ValueError(f"Missing Run or Precursor.Quantity in {self.path}")
+            if not is_matrix and "Run" not in fields:
+                raise ValueError(f"Missing Run in {self.path}")
+            if not is_matrix and precursor and "Precursor.Quantity" not in fields:
+                raise ValueError(f"Missing Precursor.Quantity in {self.path}")
+            protein_methods = tuple(
+                name for name in ("PG.Quantity", "PG.Normalised", "PG.MaxLFQ", "PG.TopN")
+                if not is_matrix and self.stage == "quantitation" and name in fields
+            )
+            protein_values = {}
             seen = set()
             self.groups = {}
             self.precursors = {}
@@ -53,6 +60,8 @@ class DIANNImporter(BaseImporter):
                 group_text = row["Protein.Group"]
                 if not group_text:
                     raise ValueError(f"{self.path}:{line}: empty Protein.Group")
+                if not is_matrix and not precursor and not protein_methods:
+                    continue
                 group = self.group(group_text)
                 precursor_id = None
                 if precursor:
@@ -88,27 +97,41 @@ class DIANNImporter(BaseImporter):
                             self.run_name(run), row.get("File.Name")
                         )
                     channel = self.channel_ids[run]
-                    key = (precursor_id, channel)
-                    if key in seen:
-                        raise ValueError(
-                            f"{self.path}:{line}: repeated precursor/run; refusing ambiguous quantities"
-                        )
-                    seen.add(key)
-                    for column in (
-                        "Precursor.Quantity",
-                        "Precursor.Normalised",
-                        "Precursor.Translated",
-                    ):
-                        if column in fields:
-                            self.add_precursor(
-                                precursor_id,
-                                channel,
-                                column,
-                                self.number(row[column]),
-                                self.number(row.get("Q.Value")),
-                                self.number(row.get("PEP")),
+                    if precursor:
+                        key = (precursor_id, channel)
+                        if key in seen:
+                            raise ValueError(
+                                f"{self.path}:{line}: repeated precursor/run; refusing ambiguous quantities"
                             )
-                    if any(
+                        seen.add(key)
+                        for column in (
+                            "Precursor.Quantity",
+                            "Precursor.Normalised",
+                            "Precursor.Translated",
+                        ):
+                            if column in fields:
+                                self.add_precursor(
+                                    precursor_id,
+                                    channel,
+                                    column,
+                                    self.number(row[column]),
+                                    self.number(row.get("Q.Value")),
+                                    self.number(row.get("PEP")),
+                                )
+                    for method in protein_methods:
+                        key = (group, channel, method)
+                        value = self.number(row[method])
+                        if key not in protein_values:
+                            protein_values[key] = value
+                        elif value is not None:
+                            previous = protein_values[key]
+                            if previous is not None and previous != value:
+                                raise ValueError(
+                                    f"{self.path}:{line}: conflicting {method} "
+                                    f"for protein group {group_text!r} and run {run!r}"
+                                )
+                            protein_values[key] = value
+                    if precursor and any(
                         self.number(row.get(column)) is not None
                         for column in (
                             "Precursor.Quantity",
@@ -118,6 +141,18 @@ class DIANNImporter(BaseImporter):
                     ):
                         self.map_precursor(precursor_id, group)
                 if line % 5000 == 0:
+                    self.database.flush()
+            for (group, channel, method), value in protein_values.items():
+                self.database.add(
+                    "protein_quant",
+                    group_id=group,
+                    channel_id=channel,
+                    source_id=self.source_id,
+                    method=method,
+                    quantity=value,
+                )
+                self.counts["protein_quant"] += 1
+                if self.counts["protein_quant"] % 5000 == 0:
                     self.database.flush()
         return self.record_counts()
 

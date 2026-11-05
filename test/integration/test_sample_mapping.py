@@ -30,6 +30,14 @@ class TestSampleMapping:
         manifests = workflow / "manifests"
         manifests.mkdir()
         shutil.copyfile(TEST_FIXTURES / "quantitation.csv", manifests / "quantitation.csv")
+        report = next(pipeline.rglob("*-report.tsv"))
+        with report.open("a") as handle:
+            handle.write("P1;P2\tPEPTIDE\tPEPTIDE\t2\tS2\t29\t30\t0.005\t0.002\n")
+        qc = workflow / "qc-ProteomicDIA-1.0.0/TEST/output/TEST_QC_metrics.tsv"
+        qc.parent.mkdir(parents=True)
+        qc.write_text(
+            (TEST_FIXTURES / "cohort_qc.tsv").read_text().replace("\tS1\t", "\tS2\t")
+        )
         output = tmp_path / "mapped.duckdb"
         VaultBuilder(pipeline, output).build()
         with duckdb.connect(str(output), read_only=True) as connection:
@@ -43,6 +51,38 @@ class TestSampleMapping:
             assert connection.execute(
                 "SELECT sample_name FROM protein_quant_long " "WHERE quantity=200"
             ).fetchall() == [("Biological_sample_2",)]
+            assert connection.execute(
+                "SELECT DISTINCT sample_name FROM qc_metrics WHERE sample_name != ''"
+            ).fetchall() == [("Biological_sample_2",)]
+            assert connection.execute(
+                "SELECT count(*) FROM qc_metrics WHERE sample_name = ''"
+            ).fetchone()[0] == 1
+        with duckdb.connect(str(output), read_only=True) as connection:
+            assert connection.execute(
+                "SELECT sample_name FROM precursor_quant_long "
+                "WHERE method='Precursor.Quantity' AND quantity=29"
+            ).fetchall() == [("Biological_sample_2",)]
+
+    def test_legacy_mzml_manifest_remains_supported(self, tmp_path):
+        manifest = tmp_path / "quantitation.csv"
+        manifest.write_text("sample_name,mzML\nShort,/raw/long.mzML\n")
+        from proteovault.sample_manifest import SampleManifest
+
+        assert SampleManifest(manifest).sample_name("long") == "Short"
+
+    def test_qc_name_without_manifest_must_match_quantification(self, pipeline, tmp_path):
+        workflow = pipeline / "metapipeline-ProteomicDIA-1.3.0/TEST/main_workflow"
+        qc = workflow / "qc-ProteomicDIA-1.0.0/TEST/output/TEST_QC_metrics.tsv"
+        qc.parent.mkdir(parents=True)
+        qc.write_text(
+            (TEST_FIXTURES / "cohort_qc.tsv").read_text().replace(
+                "\tS1\t", "\tShortSample\t"
+            )
+        )
+        output = tmp_path / "unmapped.duckdb"
+        with pytest.raises(ValueError, match="does not match a quantified sample"):
+            VaultBuilder(pipeline, output).build()
+        assert not output.exists()
 
     def test_ambiguous_manifest_stem_is_rejected(self, pipeline, tmp_path):
         workflow = pipeline / "metapipeline-ProteomicDIA-1.3.0/TEST/main_workflow"

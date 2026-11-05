@@ -6,6 +6,12 @@ All notable changes to ProteoVault are documented here.
 
 ### Added
 
+- Import UniProt ID mapping archives into the provider-neutral `protein_identifiers` table during build or through `add-uniprot-idmapping` (schema 1.1.0).
+
+- Accept published `sample_name,path` quantitation manifests and require sample-level QC names to resolve to quantified samples.
+
+- Import distinct DIA-NN report protein-group quantities from `PG.Quantity`, `PG.Normalised`, `PG.MaxLFQ`, and `PG.TopN` in the core layer when present, collapsing repeated precursor rows with conflict checks.
+
 - Add `update-paths` to repair recorded source and QC paths after moving a result directory.
 
 ## [0.1.0] - 2026-10-30
@@ -18,7 +24,7 @@ All notable changes to ProteoVault are documented here.
 
 - Import the final merged cohort QC metrics TSV during build when present, or later with `add-layer --layer qc`.
 
-- Optional `quant-details` layer for the full DIA-NN precursor report.
+- Core import of available DIA-NN report precursor quantities and confidence values.
 - Compact schema 1.0.0 with integer relationship IDs and lookup tables for repeated score, method, and stage labels.
 
 - Separate add-layer CLI and VaultLayerAdder for raw-search and MSBooster data, with dry runs, repeat-import skipping, and atomic publication.

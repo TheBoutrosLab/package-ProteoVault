@@ -7,7 +7,7 @@ from pathlib import Path
 class PipelineOutputDiscovery:
     """Resolve one analysis and select artifacts for an explicitly requested layer."""
 
-    LAYERS = ("core", "quant-details", "raw-search", "msbooster", "qc")
+    LAYERS = ("core", "raw-search", "msbooster", "qc")
 
     def __init__(self, root: str | Path):
         self.root = Path(root).expanduser().resolve()
@@ -65,6 +65,7 @@ class PipelineOutputDiscovery:
             for pattern, format_name in [
                 ("*-report.pg_matrix.tsv", "diann_pg_matrix"),
                 ("*-report.pr_matrix.tsv", "diann_pr_matrix"),
+                ("*-report.tsv", "diann_report"),
             ]:
                 matches = sorted(quant.glob(pattern))
                 if len(matches) > 1:
@@ -72,6 +73,8 @@ class PipelineOutputDiscovery:
                 artifacts.extend(
                     self.artifact(p, format_name, "quantitation") for p in matches
                 )
+                if format_name == "diann_report" and not matches:
+                    warnings.append("No DIA-NN report quantities found")
             validation = self.child_pipeline(workflow, "validate-ProteomicPSM-*")
             if validation:
                 artifacts.extend(
@@ -94,18 +97,6 @@ class PipelineOutputDiscovery:
                 )
             if not any(item["format"] in ("diann_pr_matrix",) for item in artifacts):
                 warnings.append("No precursor quantities found")
-        elif layer == "quant-details":
-            quant_roots = sorted(
-                workflow.glob("quantitate-ProteomicDIA-*/*/output/DIA-NN")
-            )
-            if len(quant_roots) != 1:
-                raise ValueError(
-                    f"Expected one published DIA-NN output under {workflow}"
-                )
-            artifacts.extend(
-                self.artifact(path, "diann_report", "quant-details")
-                for path in sorted(quant_roots[0].glob("*-report.tsv"))
-            )
         elif layer == "qc":
             artifacts.extend(self.qc_artifacts(workflow, analysis["dataset_id"]))
         elif layer == "raw-search":

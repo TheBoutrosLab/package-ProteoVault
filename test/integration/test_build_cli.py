@@ -24,7 +24,7 @@ class TestBuildCLI:
         assert main(args + ["--dry-run"]) == 0
         assert not output.parent.exists()
         plan = json.loads(capsys.readouterr().out)
-        assert len(plan["artifacts"]) == 4
+        assert len(plan["artifacts"]) == 5
         assert main(args) == 0
         capsys.readouterr()
         assert main(["validate", str(output)]) == 0
@@ -50,14 +50,14 @@ class TestBuildCLI:
         assert json.loads(captured.out)["database"] == str(output)
         for message in (
             "Discovering pipeline outputs",
-            "Importing file 1/4",
+            "Importing file 1/5",
             "Imported ",
             "Validating the completed database",
             "Validation passed",
             "Build completed",
         ):
             assert message in captured.err
-        assert captured.err.count("Importing file 1/4") == 1
+        assert captured.err.count("Importing file 1/5") == 1
         assert main(["inspect", str(output)]) == 0
         captured = capsys.readouterr()
         assert "Table counts" in captured.out

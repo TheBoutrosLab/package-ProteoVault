@@ -1,6 +1,7 @@
 """Portable proteomics results with public operation classes."""
 
 from proteovault.cli.add_fasta import VaultFastaAdder
+from proteovault.cli.add_uniprot_idmapping import VaultUniProtMappingAdder
 from proteovault.cli.add_layer import VaultLayerAdder
 from proteovault.cli.build import VaultBuilder
 from proteovault.cli.inspect import VaultInspector
@@ -10,6 +11,7 @@ from proteovault.version import __version__
 
 __all__ = [
     "VaultFastaAdder",
+    "VaultUniProtMappingAdder",
     "VaultLayerAdder",
     "VaultBuilder",
     "VaultInspector",

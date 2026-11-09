@@ -1,10 +1,13 @@
 """Import identified TMT reporter observations from final consensusXML."""
 
 from pathlib import Path
+import logging
 import xml.etree.ElementTree as ET
 
 from proteovault.importers.base import BaseImporter
 from proteovault.importers.idxml import IdXMLImporter
+
+logger = logging.getLogger(__name__)
 
 
 class TMTConsensusImporter(BaseImporter):
@@ -20,6 +23,9 @@ class TMTConsensusImporter(BaseImporter):
         scan_based = format_name == "tmt_consensus_scan"
         method = "TMT.ScanBased" if scan_based else "TMT.FeatureBased"
         self.counts = {"precursor_quant": 0}
+        self.warnings = []
+        skipped = {"no_identification": 0, "no_hit": 0,
+                   "ambiguous_identification": 0, "no_accepted_psm": 0}
         accepted = {}
         for run_name, native, precursor, spectrum in self.database.connection.execute(
             "SELECT r.run_name,s.native_id,p.precursor_id,s.spectrum_id "
@@ -34,6 +40,7 @@ class TMTConsensusImporter(BaseImporter):
         maps = {}
         seen_observations = set()
         matched = 0
+        imported_elements = 0
         for _, element in ET.iterparse(self.path, events=("end",)):
             tag = element.tag.rsplit("}", 1)[-1]
             if tag == "mapList":
@@ -50,34 +57,48 @@ class TMTConsensusImporter(BaseImporter):
                 element.clear()
             elif tag == "consensusElement":
                 identifications = element.findall("PeptideIdentification")
-                if len(identifications) != 1:
+                if not identifications:
+                    skipped["no_identification"] += 1
                     element.clear()
                     continue
-                identification = identifications[0]
-                hits = identification.findall("PeptideHit")
-                if len(hits) != 1:
+                candidates = set()
+                for identification in identifications:
+                    for hit in identification.findall("PeptideHit"):
+                        modified = hit.get("sequence", "")
+                        charge = int(hit.get("charge", "0"))
+                        if not modified or charge <= 0:
+                            raise ValueError(f"Invalid identified TMT feature {element.get('id')}")
+                        precursor = self.database.precursor(
+                            IdXMLImporter.unmodified(modified), modified, charge, "OpenMS"
+                        )
+                        if scan_based:
+                            metadata = IdXMLImporter.parameters(identification)
+                            run_name = Path(metadata.get("base_name", "").replace("\\", "/")).name
+                            native = identification.get("spectrum_reference")
+                            scan_id = IdXMLImporter.parameters(element).get("scan_id")
+                            if not native or native != scan_id:
+                                raise ValueError(
+                                    f"Scan identity mismatch in {self.path}: {element.get('id')}"
+                                )
+                            spectrum = accepted.get((run_name, native, precursor))
+                            if spectrum is not None:
+                                candidates.add((precursor, spectrum))
+                        else:
+                            candidates.add((precursor, None))
+                if not any(pid.findall("PeptideHit") for pid in identifications):
+                    skipped["no_hit"] += 1
                     element.clear()
                     continue
-                hit = hits[0]
-                modified = hit.get("sequence", "")
-                charge = int(hit.get("charge", "0"))
-                if not modified or charge <= 0:
-                    raise ValueError(f"Invalid identified TMT feature {element.get('id')}")
-                precursor = self.database.precursor(
-                    IdXMLImporter.unmodified(modified), modified, charge, "OpenMS"
-                )
-                spectrum = None
+                if not candidates:
+                    skipped["no_accepted_psm"] += 1
+                    element.clear()
+                    continue
+                if len(candidates) != 1:
+                    skipped["ambiguous_identification"] += 1
+                    element.clear()
+                    continue
+                precursor, spectrum = next(iter(candidates))
                 if scan_based:
-                    metadata = IdXMLImporter.parameters(identification)
-                    run_name = Path(metadata.get("base_name", "").replace("\\", "/")).name
-                    native = identification.get("spectrum_reference")
-                    scan_id = IdXMLImporter.parameters(element).get("scan_id")
-                    if not native or native != scan_id:
-                        raise ValueError(f"Scan identity mismatch in {self.path}: {element.get('id')}")
-                    spectrum = accepted.get((run_name, native, precursor))
-                    if spectrum is None:
-                        element.clear()
-                        continue
                     matched += 1
                 centroid = element.find("centroid")
                 rt = self.number(centroid.get("rt")) if centroid is not None else None
@@ -108,10 +129,17 @@ class TMTConsensusImporter(BaseImporter):
                     )
                     self.counts["precursor_quant"] += 1
                 element.clear()
+                imported_elements += 1
                 if self.counts["precursor_quant"] % 5000 == 0:
                     self.database.flush()
         if not maps:
             raise ValueError(f"No reporter maps in {self.path}")
         if scan_based and not matched:
             raise ValueError(f"No scan-based TMT elements matched accepted PSMs: {self.path}")
+        for reason, count in skipped.items():
+            if count:
+                warning = f"TMT consensus {self.path.name}: skipped {count} elements ({reason})"
+                logger.warning("%s", warning)
+                self.warnings.append(warning)
+        logger.info("TMT consensus %s: imported %d elements", self.path.name, imported_elements)
         return self.record_counts()

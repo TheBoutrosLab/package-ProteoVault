@@ -138,6 +138,10 @@ class PipelineOutputDiscovery:
         dataset = analysis["dataset_id"]
         artifacts = []
         warnings = []
+        tmt_directories = sorted(workflow.glob("quantitate-ProteomicTMT-*"))
+        mode = "TMT" if tmt_directories else "LFQ"
+        if len(tmt_directories) > 1:
+            raise ValueError(f"Expected one TMT quantitation directory under {workflow}")
         protein_roots = sorted(workflow.glob("quantitate-ProteomicProtein-*/" + dataset + "/OpenMS-*/output"))
         if layer == "core":
             run_manifest = workflow / "manifests" / "qc-mzml.csv"
@@ -177,7 +181,12 @@ class PipelineOutputDiscovery:
                 artifacts.append(self.artifact(proteinprophet[0], "idxml", "inference"))
             else:
                 artifacts.append(self.artifact(inferencer[0], "consensusxml", "inference"))
-            tmt_roots = sorted(workflow.glob("quantitate-ProteomicTMT-*/OpenMS-*/output"))
+            tmt_roots = sorted(tmt_directories[0].glob("OpenMS-*/output")) if tmt_directories else []
+            if mode == "TMT" and not tmt_roots:
+                warnings.append(
+                    f"TMT quantitation directory {tmt_directories[0]} has no OpenMS output; "
+                    "observation-level TMT quantities will be absent"
+                )
             if tmt_roots:
                 if len(tmt_roots) != 1:
                     raise ValueError(f"Expected one TMT output under {workflow}")
@@ -186,12 +195,12 @@ class PipelineOutputDiscovery:
                 found = [(mode, paths[0]) for mode, paths in mode_files if len(paths) == 1]
                 if len(found) != 1 or any(len(paths) > 1 for _, paths in mode_files):
                     raise ValueError(f"Expected one scan or feature TMT consensusXML under {tmt_roots[0]}")
-                mode, _ = found[0]
+                quantification_mode, _ = found[0]
                 resolved = sorted(tmt_roots[0].glob("*_IDConflictResolver.consensusXML"))
                 if len(resolved) != 1:
                     raise ValueError(f"Expected one final TMT IDConflictResolver consensusXML under {tmt_roots[0]}")
                 artifacts.append(self.artifact(
-                    resolved[0], f"tmt_consensus_{'scan' if mode == 'ScanBased' else 'feature'}",
+                    resolved[0], f"tmt_consensus_{'scan' if quantification_mode == 'ScanBased' else 'feature'}",
                     "quantitation"))
             artifacts.extend(self.qc_artifacts_dda(workflow, dataset))
         elif layer == "qc":
@@ -202,7 +211,6 @@ class PipelineOutputDiscovery:
             warnings.append("DDA MSBooster import requires run-specific PIN mapping")
         if layer != "core" and not artifacts:
             raise ValueError(f"No supported files found for layer {layer} under {workflow}")
-        mode = "TMT" if list(workflow.glob("quantitate-ProteomicTMT-*")) else "LFQ"
         return {**analysis, "layer": layer, "acquisition_mode": mode,
                 "artifacts": artifacts, "warnings": warnings}
 

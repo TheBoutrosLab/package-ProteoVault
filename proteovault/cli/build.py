@@ -140,9 +140,16 @@ class VaultBuilder:
                         pipeline_version=plan["pipeline_version"],
                         root_path=plan["root"],
                     )
-                    ImportCoordinator(database, self.pipeline_output).import_artifacts(
-                        plan["artifacts"]
-                    )
+                    import_warnings = ImportCoordinator(
+                        database, self.pipeline_output, plan["pipeline"],
+                        plan.get("acquisition_mode"),
+                    ).import_artifacts(plan["artifacts"])
+                    if import_warnings:
+                        plan["warnings"].extend(import_warnings)
+                        database.connection.execute(
+                            "UPDATE metadata SET value=? WHERE key='warnings'",
+                            [json.dumps(plan["warnings"])],
+                        )
                     database.connection.execute("COMMIT")
                 except Exception:
                     database.connection.execute("ROLLBACK")

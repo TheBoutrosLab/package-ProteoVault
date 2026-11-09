@@ -26,14 +26,12 @@ logger = logging.getLogger(__name__)
 class ImportCoordinator:
     """Register sources and dispatch format importers within the caller's transaction."""
 
-    def __init__(self, database, root):
+    def __init__(self, database, root, pipeline, acquisition_mode):
         self.database = database
         self.manifest = SourceManifest(root)
-        workflow, analysis = PipelineOutputDiscovery(root).analysis()
-        self.database.is_dda = analysis["pipeline"] == "metapipeline-ProteomicDDA"
-        self.database.dda_mode = (
-            "TMT" if list(workflow.glob("quantitate-ProteomicTMT-*")) else "LFQ"
-        )
+        workflow, _ = PipelineOutputDiscovery(root).analysis()
+        self.database.is_dda = pipeline == "metapipeline-ProteomicDDA"
+        self.database.dda_mode = acquisition_mode
         self.database.dda_channels = {}
         self.database.dda_reporters = {}
         self.database.dda_plex_type = None
@@ -46,10 +44,11 @@ class ImportCoordinator:
                     raise ValueError(f"Unsupported TMT plex type: {plex_type}")
                 self.database.dda_plex_type = plex_type
         manifest_path = workflow / "manifests" / "quantitation.csv"
-        if analysis["pipeline"] == "metapipeline-ProteomicDIA" and manifest_path.is_file():
+        if pipeline == "metapipeline-ProteomicDIA" and manifest_path.is_file():
             self.database.sample_manifest = SampleManifest(manifest_path)
 
     def import_artifacts(self, artifacts):
+        warnings = []
         if self.database.sample_manifest:
             for name in sorted(self.database.sample_manifest.samples):
                 self.database.sample(name)
@@ -78,6 +77,7 @@ class ImportCoordinator:
                 **options,
             )
             counts = importer.import_data()
+            warnings.extend(getattr(importer, "warnings", []))
             logger.info(
                 "Imported %s in %.2f s: %s",
                 artifact["path"],
@@ -85,6 +85,7 @@ class ImportCoordinator:
                 ", ".join(f"{name}={count}" for name, count in counts.items()),
             )
         self.database.flush()
+        return warnings
 
     @staticmethod
     def importer_class(format_name):

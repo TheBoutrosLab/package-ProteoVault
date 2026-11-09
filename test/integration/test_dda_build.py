@@ -82,6 +82,9 @@ def test_dda_quantitation_and_channel_identity(tmp_path, mode):
     result = VaultBuilder(root, output,
                           tmt_channel_csv=channels if mode == "TMT" else None).build()
     assert result["validation"]["valid"]
+    if mode == "TMT":
+        assert any("has no OpenMS output" in warning
+                   for warning in result["validation"]["warnings"])
     with duckdb.connect(str(output), read_only=True) as connection:
         names = [row[0] for row in connection.execute(
             "SELECT sample_name FROM samples ORDER BY sample_name"
@@ -207,6 +210,7 @@ def test_tmt_omitted_reporter_is_retained_without_shifting_columns(tmp_path):
 def test_tmt_consensus_preserves_repeated_precursor_observations(tmp_path, mode):
     root = dda_output(tmp_path, "TMT")
     workflow = next(root.rglob("main_workflow"))
+    (workflow / "quantitate-ProteomicTMT-1.0.0").rmdir()
     filtered = (workflow / "validate-ProteomicPSM-1.0.0/plex_01/"
                 "OpenMS-3.5.0/output/plex_01_filter.idXML")
     filtered.parent.mkdir(parents=True)
@@ -237,8 +241,33 @@ def test_tmt_consensus_preserves_repeated_precursor_observations(tmp_path, mode)
           <PeptideIdentification spectrum_reference="{spectrum}">
             <UserParam name="base_name" value="{base_name}"/>
             <PeptideHit sequence="PEPTIDE(TMTpro)" charge="2"/>
+            <PeptideHit sequence="PEPTIDE(TMTpro)" charge="2"/>
+          </PeptideIdentification>
+          <PeptideIdentification spectrum_reference="{spectrum}">
+            <UserParam name="base_name" value="{base_name}"/>
+            <PeptideHit sequence="PEPTIDE(TMTpro)" charge="2"/>
           </PeptideIdentification>
         </consensusElement>''')
+    features.extend([
+        '<consensusElement id="no_id"><groupedElementList>'
+        '<element map="0" it="10"/></groupedElementList></consensusElement>',
+        '<consensusElement id="no_hit"><PeptideIdentification/>'
+        '<groupedElementList><element map="0" it="10"/>'
+        '</groupedElementList></consensusElement>',
+    ])
+    if mode == "ScanBased":
+        features.append('''<consensusElement id="unmatched">
+          <UserParam name="scan_id" value="scan=3"/>
+          <PeptideIdentification spectrum_reference="scan=3">
+            <UserParam name="base_name" value="fraction_1"/>
+            <PeptideHit sequence="PEPTIDE(TMTpro)" charge="2"/>
+          </PeptideIdentification></consensusElement>''')
+    else:
+        features.append('''<consensusElement id="ambiguous">
+          <PeptideIdentification>
+            <PeptideHit sequence="PEPTIDE(TMTpro)" charge="2"/>
+            <PeptideHit sequence="OTHER(TMTpro)" charge="2"/>
+          </PeptideIdentification></consensusElement>''')
     (output_dir / "TEST_IDConflictResolver.consensusXML").write_text(
         '<consensusXML><mapList><map id="0" name="plex_01" label="tmt10plex_126"/>'
         '<map id="1" name="plex_01" label="tmt10plex_127N"/></mapList>'
@@ -247,8 +276,13 @@ def test_tmt_consensus_preserves_repeated_precursor_observations(tmp_path, mode)
     channels.write_text("plex_id,channel,description\n"
                         "plex_01,126,reference\nplex_01,127N,treated\n")
     output = tmp_path / f"{mode}.duckdb"
-    assert VaultBuilder(root, output, tmt_channel_csv=channels).build()[
-        "validation"]["valid"]
+    result = VaultBuilder(root, output, tmt_channel_csv=channels).build()
+    assert result["validation"]["valid"]
+    warnings = result["validation"]["warnings"]
+    assert any("no_identification" in warning for warning in warnings)
+    assert any("no_hit" in warning for warning in warnings)
+    assert any(("no_accepted_psm" if mode == "ScanBased" else
+                "ambiguous_identification") in warning for warning in warnings)
     with duckdb.connect(str(output), read_only=True) as connection:
         rows = connection.execute(
             "SELECT sample_name,quantity,rt_seconds,spectrum_id,source_element_id "

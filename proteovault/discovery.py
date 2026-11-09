@@ -160,6 +160,8 @@ class PipelineOutputDiscovery:
                     f"Expected one DDA protein quantitation output under {workflow}; found {len(protein_roots)}"
                 )
             root = protein_roots[0]
+            # Import peptide quantities before proteins; keep this order explicit.
+            # Each file must map its own abundance headers to channels.
             for suffix, format_name in (
                 ("_ProteinQuantifier_peptide.csv", "openms_peptide_quant"),
                 ("_ProteinQuantifier_protein.csv", "openms_protein_quant"),

@@ -125,15 +125,11 @@ class OpenMSQuantImporter(BaseImporter):
                     key = sample
             elif numbered_sample and self.database.dda_mode == "TMT":
                 if len(self.database.dda_reporters) != 1:
-                    order = getattr(self.database, "dda_peptide_column_order", None)
-                    index = int(numbered_sample.group(1))
-                    if order is None or len(order) != len(abundance) or index < 1 or index > len(order):
-                        raise ValueError(
-                            f"Cannot map {column} across multiple TMT plexes without "
-                            "matching source peptide column metadata"
-                        )
-                    mapped[column] = order[index - 1]
-                    continue
+                    raise ValueError(
+                        f"Cannot map {column} across multiple TMT plexes: "
+                        "numbered protein columns do not identify a plex or reporter; "
+                        "export protein quantities with explicit file and channel headers"
+                    )
                 plex, labels = next(iter(self.database.dda_reporters.items()))
                 index = int(numbered_sample.group(1))
                 if index < 1 or index > len(labels):
@@ -145,9 +141,4 @@ class OpenMSQuantImporter(BaseImporter):
                 mapped[column] = self.database.dda_channels[key]
             except KeyError as error:
                 raise ValueError(f"No DDA channel mapping for {column}: {key}") from error
-        if (self.database.dda_mode == "TMT" and
-                self.path.name.endswith("_ProteinQuantifier_peptide.csv") and
-                all(re.fullmatch(r"abundance\|(.+)\|ch(\d+)", name)
-                    for name in abundance)):
-            self.database.dda_peptide_column_order = list(mapped.values())
         return mapped

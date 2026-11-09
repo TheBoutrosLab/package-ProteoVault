@@ -295,7 +295,8 @@ def test_tmt_consensus_preserves_repeated_precursor_observations(tmp_path, mode)
         assert all(row[3] is not None for row in rows) == (mode == "ScanBased")
 
 
-def test_two_plex_numbered_protein_columns_follow_explicit_peptide_order(tmp_path):
+@pytest.mark.parametrize("explicit_protein_headers", [False, True])
+def test_two_plex_protein_columns_require_explicit_identity(tmp_path, explicit_protein_headers):
     root = dda_output(tmp_path, "TMT")
     workflow = next(root.rglob("main_workflow"))
     manifest = workflow / "manifests/qc-mzml.csv"
@@ -304,9 +305,14 @@ def test_two_plex_numbered_protein_columns_follow_explicit_peptide_order(tmp_pat
     output_dir = next(root.rglob("OpenMS-3.5.0/output"))
     protein = output_dir / "TEST_ProteinQuantifier_protein.csv"
     peptide = output_dir / "TEST_ProteinQuantifier_peptide.csv"
-    protein.write_text(protein.read_text().replace('"abundance_1"',
-        '"abundance_sample1[unknown]"').replace('"abundance_2"',
-        '"abundance_sample2[unknown]"'))
+    if explicit_protein_headers:
+        protein.write_text(protein.read_text().replace('"abundance_1"',
+            '"abundance|plex_01|ch1"').replace('"abundance_2"',
+            '"abundance|plex_02|ch1"'))
+    else:
+        protein.write_text(protein.read_text().replace('"abundance_1"',
+            '"abundance_sample1[unknown]"').replace('"abundance_2"',
+            '"abundance_sample2[unknown]"'))
     peptide.write_text(peptide.read_text().replace('"abundance_1"',
         '"abundance|plex_01|ch1"').replace('"abundance_2"',
         '"abundance|plex_02|ch1"'))
@@ -314,6 +320,11 @@ def test_two_plex_numbered_protein_columns_follow_explicit_peptide_order(tmp_pat
     channels.write_text("plex_id,channel,description\n"
                         "plex_01,126,reference\nplex_02,126,reference\n")
     output = tmp_path / "two_plex.duckdb"
+    if not explicit_protein_headers:
+        with pytest.raises(ValueError, match="numbered protein columns do not identify"):
+            VaultBuilder(root, output, tmt_channel_csv=channels).build()
+        assert not output.exists()
+        return
     assert VaultBuilder(root, output, tmt_channel_csv=channels).build()[
         "validation"]["valid"]
     with duckdb.connect(str(output), read_only=True) as connection:

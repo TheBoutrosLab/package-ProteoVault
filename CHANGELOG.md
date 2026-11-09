@@ -2,9 +2,12 @@
 
 All notable changes to ProteoVault are documented here.
 
-## [Unreleased] - 2026-11-04
+## [Unreleased] - 2026-11-09
 
 ### Added
+
+- Import DDA LFQ and TMT protein and peptide quantities, filtered PSMs, TMT reporter observations, and acquisition metadata into the core vault.
+- Preserve DIA-NN report retention times and individual TMT scan or feature observations in `precursor_quant`.
 
 - Import UniProt ID mapping archives into the provider-neutral `protein_identifiers` table during build or through `add-uniprot-idmapping` (schema 1.1.0).
 

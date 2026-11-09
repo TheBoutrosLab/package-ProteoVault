@@ -37,6 +37,7 @@ class VaultBuilder:
         force: bool = False,
         fasta: str | Path | None = None,
         uniprot_idmapping: str | Path | None = None,
+        tmt_channel_csv: str | Path | None = None,
     ):
         self.pipeline_output = Path(pipeline_output).expanduser().resolve()
         self.output = Path(output).expanduser().absolute()
@@ -44,6 +45,9 @@ class VaultBuilder:
         self.fasta = Path(fasta).expanduser().resolve() if fasta else None
         self.uniprot_idmapping = (
             Path(uniprot_idmapping).expanduser().resolve() if uniprot_idmapping else None
+        )
+        self.tmt_channel_csv = (
+            Path(tmt_channel_csv).expanduser().resolve() if tmt_channel_csv else None
         )
 
     def plan(self) -> dict:
@@ -53,6 +57,16 @@ class VaultBuilder:
             )
         logger.info("Discovering pipeline outputs in %s", self.pipeline_output)
         plan = PipelineOutputDiscovery(self.pipeline_output).discover()
+        if plan["pipeline"] == "metapipeline-ProteomicDDA" and plan["acquisition_mode"] == "TMT":
+            if self.tmt_channel_csv is None or not self.tmt_channel_csv.is_file():
+                raise ValueError("DDA TMT builds require --tmt-channel-csv")
+            plan["artifacts"].insert(0, dict(
+                path=str(self.tmt_channel_csv), format="tmt_channel_manifest",
+                stage="design", sample_name=None,
+                relative_path=f"tmt_channel_manifest/{self.tmt_channel_csv.name}",
+            ))
+        elif self.tmt_channel_csv is not None:
+            raise ValueError("--tmt-channel-csv is only valid for DDA TMT builds")
         if self.fasta is not None:
             if not self.fasta.is_file():
                 raise FileNotFoundError(f"FASTA file does not exist: {self.fasta}")
@@ -126,9 +140,16 @@ class VaultBuilder:
                         pipeline_version=plan["pipeline_version"],
                         root_path=plan["root"],
                     )
-                    ImportCoordinator(database, self.pipeline_output).import_artifacts(
-                        plan["artifacts"]
-                    )
+                    import_warnings = ImportCoordinator(
+                        database, self.pipeline_output, plan["pipeline"],
+                        plan.get("acquisition_mode"),
+                    ).import_artifacts(plan["artifacts"])
+                    if import_warnings:
+                        plan["warnings"].extend(import_warnings)
+                        database.connection.execute(
+                            "UPDATE metadata SET value=? WHERE key='warnings'",
+                            [json.dumps(plan["warnings"])],
+                        )
                     database.connection.execute("COMMIT")
                 except Exception:
                     database.connection.execute("ROLLBACK")
@@ -185,6 +206,10 @@ def add_parser(subparsers: _SubParsersAction[ArgumentParser]) -> None:
         help="Local UniProt idmapping.gz archive for existing UniProt proteins",
     )
     parser.add_argument(
+        "--tmt-channel-csv", type=Path,
+        help="TMT channel.csv with plex_id,channel,description columns",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Replace output only after a successful build",
@@ -204,6 +229,7 @@ def run(args: Namespace) -> int:
         force=args.force,
         fasta=args.fasta,
         uniprot_idmapping=args.uniprot_idmapping,
+        tmt_channel_csv=args.tmt_channel_csv,
     )
     result = builder.plan() if args.dry_run else builder.build()
     if args.dry_run:

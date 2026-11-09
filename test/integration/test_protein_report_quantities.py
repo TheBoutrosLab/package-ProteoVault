@@ -92,3 +92,21 @@ def test_core_imports_all_available_precursor_report_methods_and_confidence(pipe
             ("Precursor.Quantity", 19, 0.005, 0.002),
             ("Precursor.Translated", 21, 0.005, 0.002),
         ]
+
+
+def test_diann_report_retention_times_are_kept_in_seconds(pipeline, tmp_path):
+    report = next(pipeline.rglob("*-report.tsv"))
+    report.write_text(report.read_text()
+        .replace("Q.Value\tPEP", "RT\tRT.Start\tRT.Stop\tQ.Value\tPEP")
+        .replace("20\t0.005\t0.002", "20\t12.5\t12.1\t12.9\t0.005\t0.002"))
+    output = tmp_path / "rt.duckdb"
+    VaultBuilder(pipeline, output).build()
+    with duckdb.connect(str(output), read_only=True) as connection:
+        assert connection.execute(
+            "SELECT rt_seconds,rt_start_seconds,rt_stop_seconds "
+            "FROM precursor_quant_readable WHERE method='Precursor.Quantity'"
+        ).fetchone() == (750.0, 726.0, 774.0)
+        assert connection.execute(
+            "SELECT count(*) FROM precursor_quant WHERE rt_seconds IS NULL "
+            "AND method_id=(SELECT method_id FROM quant_methods WHERE name='matrix')"
+        ).fetchone()[0] > 0

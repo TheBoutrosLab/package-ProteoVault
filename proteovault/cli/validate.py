@@ -75,8 +75,13 @@ class VaultValidator:
                     ("peptides", "peptide_id"),
                     ("peptidoforms", "peptidoform_id"),
                     ("precursors", "precursor_id"),
+                    ("precursor_quant", "quant_id"),
                     ("proteins", "protein_id"),
                     ("quant_channels", "channel_id"),
+                    ("tmt_plexes", "plex_id"),
+                    ("tmt_channels", "channel_id"),
+                    ("tmt_runs", "run_id"),
+                    ("peptide_quant_features", "feature_id"),
                 ]:
                     total, unique = connection.execute(
                         f'SELECT count(*),count(DISTINCT "{key}") FROM "{table}"'
@@ -86,6 +91,8 @@ class VaultValidator:
                 for table, columns in (
                     ("source_files", "path, format, stage"),
                     ("samples", "sample_name"),
+                    ("tmt_plexes", "plex_name"),
+                    ("tmt_channels", "plex_id, reporter_label"),
                     ("runs", "run_name"),
                     ("spectra", "run_id, native_id"),
                     ("peptides", "sequence"),
@@ -102,7 +109,36 @@ class VaultValidator:
                     ).fetchone()
                     if duplicate:
                         errors.append(f"{table}: duplicate natural key ({columns})")
-                for table in ("protein_quant", "precursor_quant"):
+                wrong_reference = connection.execute(
+                    "SELECT count(*) FROM tmt_plexes p "
+                    "LEFT JOIN tmt_channels c ON p.reference_channel_id=c.channel_id "
+                    "WHERE p.reference_channel_id IS NOT NULL "
+                    "AND (c.channel_id IS NULL OR c.plex_id<>p.plex_id)"
+                ).fetchall()[0][0]
+                if wrong_reference:
+                    errors.append(
+                        f"tmt_plexes: {wrong_reference} missing or cross-plex reference channels"
+                    )
+                mislabeled_channels = connection.execute(
+                    "SELECT count(*) FROM tmt_channels t "
+                    "JOIN tmt_plexes p USING(plex_id) "
+                    "JOIN quant_channels c USING(channel_id) "
+                    "JOIN samples s USING(sample_id) "
+                    "WHERE s.sample_name <> p.plex_name || '|' || t.reporter_label"
+                ).fetchall()[0][0]
+                if mislabeled_channels:
+                    errors.append(
+                        f"tmt_channels: {mislabeled_channels} sample names do not match plex|reporter"
+                    )
+                invalid_tmt_runs = connection.execute(
+                    "SELECT count(*) FROM tmt_runs t JOIN runs r USING(run_id) "
+                    "WHERE r.sample_id IS NOT NULL"
+                ).fetchall()[0][0]
+                if invalid_tmt_runs:
+                    errors.append(
+                        f"tmt_runs: {invalid_tmt_runs} runs also point to individual samples"
+                    )
+                for table in ("protein_quant", "precursor_quant", "peptide_quant"):
                     invalid = connection.execute(
                         f"SELECT count(*) FROM {table} WHERE quantity < 0 OR NOT isfinite(quantity)"
                     ).fetchone()[0]
@@ -117,9 +153,19 @@ class VaultValidator:
                     errors.append(
                         f"precursor_quant: {invalid} invalid confidence values"
                     )
+                invalid = connection.execute(
+                    "SELECT count(*) FROM precursor_quant q JOIN source_files f USING(source_id) "
+                    "WHERE f.format IN ('tmt_consensus_scan','tmt_consensus_feature') "
+                    "AND (q.source_element_id IS NULL OR q.source_map_id IS NULL "
+                    "OR q.rt_seconds IS NULL "
+                    "OR (f.format='tmt_consensus_scan' AND q.spectrum_id IS NULL) "
+                    "OR (f.format='tmt_consensus_feature' AND q.spectrum_id IS NOT NULL))"
+                ).fetchone()[0]
+                if invalid:
+                    errors.append(f"precursor_quant: {invalid} invalid TMT observation links")
                 for source_id, entity, expected in connection.execute(
                     "SELECT source_id,entity,row_count FROM import_counts "
-                    "WHERE entity IN ('psms','protein_quant','precursor_quant','pin_features','qc_metrics','protein_identifiers')"
+                    "WHERE entity IN ('psms','protein_quant','precursor_quant','peptide_quant','peptide_quant_features','pin_features','qc_metrics','protein_identifiers')"
                 ).fetchall():
                     actual_count = connection.execute(
                         f"SELECT count(*) FROM {entity} WHERE source_id=?", [source_id]
@@ -209,12 +255,24 @@ class VaultValidator:
             ("protein_identifiers", "source_id", "source_files", "source_id"),
             ("quant_channels", "sample_id", "samples", "sample_id"),
             ("quant_channels", "run_id", "runs", "run_id"),
+            ("tmt_plexes", "reference_channel_id", "tmt_channels", "channel_id"),
+            ("tmt_channels", "channel_id", "quant_channels", "channel_id"),
+            ("tmt_channels", "plex_id", "tmt_plexes", "plex_id"),
+            ("tmt_runs", "run_id", "runs", "run_id"),
+            ("tmt_runs", "plex_id", "tmt_plexes", "plex_id"),
             ("precursor_quant", "precursor_id", "precursors", "precursor_id"),
             ("precursor_quant", "channel_id", "quant_channels", "channel_id"),
             ("precursor_quant", "source_id", "source_files", "source_id"),
+            ("precursor_quant", "spectrum_id", "spectra", "spectrum_id"),
             ("protein_quant", "group_id", "protein_groups", "group_id"),
             ("protein_quant", "channel_id", "quant_channels", "channel_id"),
             ("protein_quant", "source_id", "source_files", "source_id"),
+            ("peptide_quant_features", "source_id", "source_files", "source_id"),
+            ("peptide_quant_features", "peptide_id", "peptides", "peptide_id"),
+            ("peptide_quant", "feature_id", "peptide_quant_features", "feature_id"),
+            ("peptide_quant", "channel_id", "quant_channels", "channel_id"),
+            ("peptide_quant", "source_id", "source_files", "source_id"),
+            ("peptide_quant", "method_id", "quant_methods", "method_id"),
             ("precursor_groups", "precursor_id", "precursors", "precursor_id"),
             ("precursor_groups", "group_id", "protein_groups", "group_id"),
             ("pin_features", "source_id", "source_files", "source_id"),

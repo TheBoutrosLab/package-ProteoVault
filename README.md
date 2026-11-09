@@ -1,6 +1,6 @@
 # ProteoVault
 
-ProteoVault stores linked proteomics results in a portable DuckDB database for analysis in R, Python, and SQL. It currently supports completed metapipeline-ProteomicDIA analyses.
+ProteoVault stores linked proteomics results in a portable DuckDB database for analysis in R, Python, and SQL. It imports completed metapipeline-ProteomicDIA analyses and DDA ProteinQuantifier LFQ or TMT abundance tables.
 
 Core builds retain available DIA-NN protein-group and precursor quantities from both the matrices and the detailed report.
 

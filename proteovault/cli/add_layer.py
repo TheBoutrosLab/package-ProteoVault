@@ -79,8 +79,10 @@ class VaultLayerAdder:
         )
         artifacts = []
         skipped = []
+        acquisition_mode = None
         for layer in self.layers:
             discovered = discovery.discover(layer=layer)
+            acquisition_mode = discovered.get("acquisition_mode")
             if (
                 tuple(
                     discovered[key]
@@ -113,6 +115,8 @@ class VaultLayerAdder:
         return dict(
             database=str(self.database),
             root=str(source_root),
+            pipeline=row[1],
+            acquisition_mode=acquisition_mode,
             layers=self.layers,
             artifacts=artifacts,
             skipped=skipped,
@@ -148,9 +152,18 @@ class VaultLayerAdder:
                 database.load_layout()
                 database.connection.execute("BEGIN TRANSACTION")
                 try:
-                    ImportCoordinator(database, plan["root"]).import_artifacts(
-                        plan["artifacts"]
-                    )
+                    import_warnings = ImportCoordinator(
+                        database, plan["root"], plan["pipeline"],
+                        plan["acquisition_mode"],
+                    ).import_artifacts(plan["artifacts"])
+                    if import_warnings:
+                        existing = json.loads(database.connection.execute(
+                            "SELECT value FROM metadata WHERE key='warnings'"
+                        ).fetchone()[0])
+                        database.connection.execute(
+                            "UPDATE metadata SET value=? WHERE key='warnings'",
+                            [json.dumps(existing + import_warnings)],
+                        )
                     database.connection.execute("COMMIT")
                 except Exception:
                     database.connection.execute("ROLLBACK")

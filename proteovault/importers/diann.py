@@ -117,6 +117,9 @@ class DIANNImporter(BaseImporter):
                                     self.number(row[column]),
                                     self.number(row.get("Q.Value")),
                                     self.number(row.get("PEP")),
+                                    rt_seconds=self.minutes_to_seconds(row.get("RT")),
+                                    rt_start_seconds=self.minutes_to_seconds(row.get("RT.Start")),
+                                    rt_stop_seconds=self.minutes_to_seconds(row.get("RT.Stop")),
                                 )
                     for method in protein_methods:
                         key = (group, channel, method)
@@ -187,9 +190,12 @@ class DIANNImporter(BaseImporter):
             self.mappings.clear()
         self.mappings.add(key)
 
-    def add_precursor(self, precursor, channel, method, value, q_value=None, pep=None):
+    def add_precursor(self, precursor, channel, method, value, q_value=None, pep=None,
+                      rt_seconds=None, rt_start_seconds=None, rt_stop_seconds=None):
         self.database.add(
             "precursor_quant",
+            quant_id=self.database.identity("precursor_quant", self.source_id,
+                                            precursor, channel, method),
             precursor_id=precursor,
             channel_id=channel,
             source_id=self.source_id,
@@ -197,5 +203,12 @@ class DIANNImporter(BaseImporter):
             quantity=value,
             q_value=q_value,
             pep=pep,
+            rt_seconds=rt_seconds,
+            rt_start_seconds=rt_start_seconds,
+            rt_stop_seconds=rt_stop_seconds,
         )
         self.counts["precursor_quant"] += 1
+
+    def minutes_to_seconds(self, value):
+        minutes = self.number(value)
+        return None if minutes is None else minutes * 60

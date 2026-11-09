@@ -84,7 +84,7 @@ class ProteoVaultDatabase:
             values["method_id"] = identifier
         field = (
             "method"
-            if table in ("protein_quant", "precursor_quant")
+            if table in ("protein_quant", "precursor_quant", "peptide_quant")
             else (
                 "stage"
                 if table == "psms"
@@ -137,8 +137,13 @@ class ProteoVaultDatabase:
             "protein_groups",
             "protein_group_members",
             "quant_channels",
+            "tmt_plexes",
+            "tmt_channels",
+            "tmt_runs",
             "precursor_quant",
             "protein_quant",
+            "peptide_quant_features",
+            "peptide_quant",
             "precursor_groups",
             "pin_features",
             "qc_metrics",
@@ -283,6 +288,8 @@ class ProteoVaultDatabase:
         group_type: str = "quantification",
         score: float | None = None,
         score_type: str | None = None,
+        reported_n_proteins: int | None = None,
+        reported_n_peptides: int | None = None,
     ) -> str:
         key = self.identity("group", source_id, identifier, group_type)
         self.add(
@@ -294,6 +301,8 @@ class ProteoVaultDatabase:
             group_type=group_type,
             score=score,
             score_type=score_type,
+            reported_n_proteins=reported_n_proteins,
+            reported_n_peptides=reported_n_peptides,
         )
         for accession in accessions:
             self.add(

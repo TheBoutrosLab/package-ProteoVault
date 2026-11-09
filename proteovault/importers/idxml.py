@@ -1,6 +1,7 @@
 """Stream OpenMS idXML while retaining source-specific PSM stages and group types."""
 
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from proteovault.importers.base import BaseImporter
 
@@ -51,6 +52,11 @@ class IdXMLImporter(BaseImporter):
         self.run_id = (
             self.database.resolve_run(self.sample_name) if self.sample_name else None
         )
+        self.dda_runs = {}
+        if getattr(self.database, "is_dda", False) and self.stage == "validation":
+            self.database.flush()
+            self.dda_runs = dict(self.database.connection.execute(
+                "SELECT run_name,run_id FROM runs").fetchall())
         refs = {}
         engine = "unknown"
         protein_score_type = None
@@ -95,7 +101,7 @@ class IdXMLImporter(BaseImporter):
             elif tag == "PeptideIdentification":
                 identification_index += 1
                 # Cohort inference idXML can refer to many source runs. Do not fabricate a run.
-                if self.sample_name is not None:
+                if self.sample_name is not None or self.dda_runs:
                     self.import_identification(
                         element, refs, engine, identification_index
                     )
@@ -145,6 +151,12 @@ class IdXMLImporter(BaseImporter):
                 f"Missing spectrum reference in {self.path}, identification {index}"
             )
         run = self.run_id
+        if self.dda_runs:
+            base = metadata.get("base_name", "").replace("\\", "/")
+            name = Path(base).name
+            if name not in self.dda_runs:
+                raise ValueError(f"Unknown DDA run {name!r} in {self.path}")
+            run = self.dda_runs[name]
         spectrum = self.database.identity("spectrum", run, native)
         self.database.add(
             "spectra",

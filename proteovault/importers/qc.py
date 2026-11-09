@@ -6,7 +6,7 @@ from proteovault.importers.base import BaseImporter
 
 
 class QCImporter(BaseImporter):
-    """Stream one merged qc-ProteomicDIA metrics TSV into the vault."""
+    """Stream one merged DIA or DDA cohort QC metrics TSV into the vault."""
 
     FIELDS = [
         "dataset_id",
@@ -22,11 +22,18 @@ class QCImporter(BaseImporter):
         "status",
         "source_file",
     ]
+    DDA_FIELDS = [
+        "dataset_id", "acquisition_mode", "layer", "sample_name",
+        "fraction_id", "search_engine", "inference_route", "source_process",
+        "metric_name", "group", "value", "unit", "status", "source_file",
+        "calculation_version",
+    ]
 
     def import_data(self) -> dict[str, int]:
-        dataset = self.database.connection.execute(
-            "SELECT dataset_id FROM analysis"
-        ).fetchall()[0][0]
+        dataset, pipeline = self.database.connection.execute(
+            "SELECT dataset_id, pipeline FROM analysis"
+        ).fetchall()[0]
+        dda = pipeline == "metapipeline-ProteomicDDA"
         self.database.flush()
         quantified_samples = {
             name for (name,) in self.database.connection.execute(
@@ -34,10 +41,16 @@ class QCImporter(BaseImporter):
                 "JOIN samples s USING(sample_id)"
             ).fetchall()
         }
+        if dda and self.database.dda_mode == "TMT":
+            quantified_samples = {
+                name for (name,) in self.database.connection.execute(
+                    "SELECT plex_name FROM tmt_plexes"
+                ).fetchall()
+            }
         self.counts = {"qc_metrics": 0}
         with self.path.open(encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
-            if reader.fieldnames != self.FIELDS:
+            if reader.fieldnames != (self.DDA_FIELDS if dda else self.FIELDS):
                 raise ValueError(
                     f"Unexpected cohort QC columns in {self.path}: {reader.fieldnames}"
                 )
@@ -63,24 +76,25 @@ class QCImporter(BaseImporter):
                     )
                 sample_name = (
                     self.database.sample_manifest.sample_name(row["sample_name"])
-                    if row["sample_name"] and self.database.sample_manifest
+                    if row["sample_name"] and self.database.sample_manifest and not dda
                     else row["sample_name"]
                 )
                 if sample_name and sample_name not in quantified_samples:
                     raise ValueError(
                         f"{self.path}: row {row_number} QC sample {row['sample_name']!r} "
-                        "does not match a quantified sample; provide a matching "
-                        "manifests/quantitation.csv"
+                        "does not match a quantified sample or plex"
                     )
                 self.database.add(
                     "qc_metrics",
                     source_id=self.source_id,
                     row_number=row_number,
                     dataset_id=row["dataset_id"],
+                    acquisition_mode=row.get("acquisition_mode"),
                     layer=row["layer"],
                     source_process=row["source_process"],
                     sample_name=sample_name,
                     search_engine=row["search_engine"],
+                    inference_route=row.get("inference_route"),
                     fraction_id=row["fraction_id"],
                     metric_name=row["metric_name"],
                     group=row["group"],
@@ -88,6 +102,7 @@ class QCImporter(BaseImporter):
                     unit=row["unit"],
                     status=row["status"],
                     source_file=row["source_file"],
+                    calculation_version=row.get("calculation_version"),
                 )
                 self.counts["qc_metrics"] += 1
                 if row_number % 5000 == 0:

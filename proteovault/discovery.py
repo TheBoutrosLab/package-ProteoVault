@@ -1,4 +1,4 @@
-"""Discover the core or optional layers of one published DIA analysis."""
+"""Discover the core or optional layers of one published proteomics analysis."""
 
 import re
 from pathlib import Path
@@ -17,15 +17,17 @@ class PipelineOutputDiscovery:
             raise FileNotFoundError(
                 f"Pipeline output directory does not exist: {self.root}"
             )
-        if re.fullmatch(r"metapipeline-ProteomicDIA-[0-9].*", self.root.name):
+        pattern = r"metapipeline-Proteomic(?:DIA|DDA)-[0-9].*"
+        if re.fullmatch(pattern, self.root.name):
             candidates = [self.root]
         else:
             candidates = sorted(
-                p for p in self.root.glob("metapipeline-ProteomicDIA-*") if p.is_dir()
+                p for p in self.root.glob("metapipeline-ProteomicD*-*")
+                if p.is_dir() and re.fullmatch(pattern, p.name)
             )
         if len(candidates) != 1:
             raise ValueError(
-                f"Expected one metapipeline-ProteomicDIA version under {self.root}; found {len(candidates)}"
+                f"Expected one DDA or DIA metapipeline version under {self.root}; found {len(candidates)}"
             )
         version_root = candidates[0]
         workflows = sorted(version_root.glob("*/main_workflow"))
@@ -34,12 +36,13 @@ class PipelineOutputDiscovery:
                 f"Expected one dataset/main_workflow under {version_root}; found {len(workflows)}"
             )
         workflow = workflows[0]
+        match = re.fullmatch(r"(metapipeline-ProteomicD(?:IA|DA))-(.+)", version_root.name)
+        assert match is not None
+        pipeline, version = match.groups()
         return workflow, dict(
             dataset_id=workflow.parent.name,
-            pipeline="metapipeline-ProteomicDIA",
-            pipeline_version=version_root.name.removeprefix(
-                "metapipeline-ProteomicDIA-"
-            ),
+            pipeline=pipeline,
+            pipeline_version=version,
             root=str(self.root),
         )
 
@@ -47,6 +50,8 @@ class PipelineOutputDiscovery:
         if layer not in self.LAYERS:
             raise ValueError(f"Unknown layer: {layer}")
         workflow, analysis = self.analysis()
+        if analysis["pipeline"] == "metapipeline-ProteomicDDA":
+            return self.discover_dda(workflow, analysis, layer)
         artifacts = []
         warnings = []
         if layer == "core":
@@ -127,6 +132,87 @@ class PipelineOutputDiscovery:
             "artifacts": artifacts,
             "warnings": warnings,
         }
+
+    def discover_dda(self, workflow: Path, analysis: dict, layer: str) -> dict:
+        """Select published DDA results without treating them as DIA-NN files."""
+        dataset = analysis["dataset_id"]
+        artifacts = []
+        warnings = []
+        protein_roots = sorted(workflow.glob("quantitate-ProteomicProtein-*/" + dataset + "/OpenMS-*/output"))
+        if layer == "core":
+            run_manifest = workflow / "manifests" / "qc-mzml.csv"
+            if not run_manifest.is_file():
+                run_manifest = workflow / "manifests" / "validation-mzml.csv"
+            if not run_manifest.is_file():
+                raise ValueError(f"Missing DDA acquisition manifest under {workflow}")
+            artifacts.append(self.artifact(run_manifest, "dda_run_manifest", "design"))
+            validation = self.child_pipeline(workflow, "validate-ProteomicPSM-*")
+            if validation:
+                artifacts.extend(self.artifact(path, "idxml", "validation")
+                                 for path in sorted(validation.glob(
+                                     "*/OpenMS-*/output/*_filter.idXML")))
+            if len(protein_roots) != 1:
+                raise ValueError(
+                    f"Expected one DDA protein quantitation output under {workflow}; found {len(protein_roots)}"
+                )
+            root = protein_roots[0]
+            for suffix, format_name in (
+                ("_ProteinQuantifier_peptide.csv", "openms_peptide_quant"),
+                ("_ProteinQuantifier_protein.csv", "openms_protein_quant"),
+            ):
+                matches = sorted(root.glob("*" + suffix))
+                if len(matches) != 1:
+                    raise ValueError(f"Expected one {format_name} under {root}; found {len(matches)}")
+                artifacts.append(self.artifact(matches[0], format_name, "quantitation"))
+            proteinprophet = sorted(root.glob("*_ProteinProphet_filtered.idXML"))
+            if not proteinprophet:
+                proteinprophet = sorted(
+                    root.parent.glob("intermediate/filter_protein_groups/"
+                                     "*_ProteinProphet_filtered.idXML")
+                )
+            inferencer = sorted(root.glob("*_IDConflictResolver.consensusXML"))
+            if len(proteinprophet) + len(inferencer) != 1:
+                raise ValueError("Expected one published DDA protein inference artifact")
+            if proteinprophet:
+                artifacts.append(self.artifact(proteinprophet[0], "idxml", "inference"))
+            else:
+                artifacts.append(self.artifact(inferencer[0], "consensusxml", "inference"))
+            tmt_roots = sorted(workflow.glob("quantitate-ProteomicTMT-*/OpenMS-*/output"))
+            if tmt_roots:
+                if len(tmt_roots) != 1:
+                    raise ValueError(f"Expected one TMT output under {workflow}")
+                mode_files = [(mode, sorted(tmt_roots[0].glob(f"*_{mode}.consensusXML")))
+                              for mode in ("ScanBased", "FeatureBased")]
+                found = [(mode, paths[0]) for mode, paths in mode_files if len(paths) == 1]
+                if len(found) != 1 or any(len(paths) > 1 for _, paths in mode_files):
+                    raise ValueError(f"Expected one scan or feature TMT consensusXML under {tmt_roots[0]}")
+                mode, _ = found[0]
+                resolved = sorted(tmt_roots[0].glob("*_IDConflictResolver.consensusXML"))
+                if len(resolved) != 1:
+                    raise ValueError(f"Expected one final TMT IDConflictResolver consensusXML under {tmt_roots[0]}")
+                artifacts.append(self.artifact(
+                    resolved[0], f"tmt_consensus_{'scan' if mode == 'ScanBased' else 'feature'}",
+                    "quantitation"))
+            artifacts.extend(self.qc_artifacts_dda(workflow, dataset))
+        elif layer == "qc":
+            artifacts.extend(self.qc_artifacts_dda(workflow, dataset))
+        elif layer == "raw-search":
+            warnings.append("DDA raw-search import requires run-specific idXML mapping")
+        elif layer == "msbooster":
+            warnings.append("DDA MSBooster import requires run-specific PIN mapping")
+        if layer != "core" and not artifacts:
+            raise ValueError(f"No supported files found for layer {layer} under {workflow}")
+        mode = "TMT" if list(workflow.glob("quantitate-ProteomicTMT-*")) else "LFQ"
+        return {**analysis, "layer": layer, "acquisition_mode": mode,
+                "artifacts": artifacts, "warnings": warnings}
+
+    def qc_artifacts_dda(self, workflow: Path, dataset_id: str) -> list[dict]:
+        paths = sorted(workflow.glob(
+            f"qc-ProteomicDDA-*/{dataset_id}/output/{dataset_id}_QC_metrics.tsv"
+        ))
+        if len(paths) > 1:
+            raise ValueError(f"Multiple DDA QC tables under {workflow}: {paths}")
+        return [self.artifact(path, "qc_metrics", "qc") for path in paths]
 
     def qc_artifacts(self, workflow: Path, dataset_id: str) -> list[dict]:
         """Select the single published cohort QC table, if available."""

@@ -34,6 +34,7 @@ class ImportCoordinator:
         self.database.dda_mode = acquisition_mode
         self.database.dda_channels = {}
         self.database.dda_reporters = {}
+        self.database.dda_channel_descriptions = {}
         self.database.dda_plex_type = None
         if self.database.dda_mode == "TMT":
             resolved = workflow.parents[2] / "run.resolved.yaml"

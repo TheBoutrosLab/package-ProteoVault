@@ -240,6 +240,8 @@ class VaultValidator:
             ("psm_scores", "score_id", "score_types", "score_id"),
             ("psms", "stage_id", "processing_stages", "stage_id"),
             ("protein_quant", "method_id", "quant_methods", "method_id"),
+            ("source_quant_methods", "source_id", "source_files", "source_id"),
+            ("source_quant_methods", "method_id", "quant_methods", "method_id"),
             ("protein_groups", "method_id", "grouping_methods", "method_id"),
             ("precursor_quant", "method_id", "quant_methods", "method_id"),
             ("psm_features", "psm_id", "psms", "psm_id"),

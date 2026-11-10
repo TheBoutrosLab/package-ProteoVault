@@ -22,10 +22,13 @@ class TMTConsensusImporter(BaseImporter):
             raise ValueError(f"Unsupported TMT consensus source format: {format_name}")
         scan_based = format_name == "tmt_consensus_scan"
         method = "TMT.ScanBased" if scan_based else "TMT.FeatureBased"
+        self.database.register_quant_method(self.source_id, "precursor_quant", method)
         self.counts = {"precursor_quant": 0}
         self.warnings = []
         skipped = {"no_identification": 0, "no_hit": 0,
                    "ambiguous_identification": 0, "no_accepted_psm": 0}
+        quantity_scale = "intensity"
+        seen_normalizer = False
         accepted = {}
         for run_name, native, precursor, spectrum in self.database.connection.execute(
             "SELECT r.run_name,s.native_id,p.precursor_id,s.spectrum_id "
@@ -43,7 +46,19 @@ class TMTConsensusImporter(BaseImporter):
         imported_elements = 0
         for _, element in ET.iterparse(self.path, events=("end",)):
             tag = element.tag.rsplit("}", 1)[-1]
-            if tag == "mapList":
+            if tag == "dataProcessing":
+                software = element.find("software")
+                if software is not None and software.get("name") == "msptools::MADNormalizer":
+                    if seen_normalizer:
+                        raise ValueError(f"Multiple MAD normalization records: {self.path}")
+                    seen_normalizer = True
+                    option = next((item.get("value") for item in element.findall("UserParam")
+                                   if item.get("name") == "parameter: quasi_intensity"), None)
+                    if option not in ("0", "1"):
+                        raise ValueError(f"Unknown MAD quantity scale in {self.path}: {option}")
+                    quantity_scale = "quasi_intensity" if option == "1" else "log2_ratio"
+                element.clear()
+            elif tag == "mapList":
                 for entry in element:
                     if entry.tag.rsplit("}", 1)[-1] != "map":
                         continue
@@ -136,6 +151,13 @@ class TMTConsensusImporter(BaseImporter):
             raise ValueError(f"No reporter maps in {self.path}")
         if scan_based and not matched:
             raise ValueError(f"No scan-based TMT elements matched accepted PSMs: {self.path}")
+        self.database.add("metadata", key=f"tmt_quantity_scale:{self.source_id}",
+                          value=quantity_scale)
+        if not scan_based and quantity_scale != "quasi_intensity":
+            warning = (f"FeatureBased TMT consensus {self.path.name} uses {quantity_scale}; "
+                       "quasi-intensity normalization was not used")
+            logger.warning("%s", warning)
+            self.warnings.append(warning)
         for reason, count in skipped.items():
             if count:
                 warning = f"TMT consensus {self.path.name}: skipped {count} elements ({reason})"

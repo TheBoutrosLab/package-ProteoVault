@@ -94,6 +94,11 @@ def test_dda_quantitation_and_channel_identity(tmp_path, mode):
         assert connection.execute("SELECT count(*) FROM protein_quant").fetchone()[0] == 2
         assert connection.execute("SELECT count(*) FROM peptide_quant").fetchone()[0] == 2
         assert connection.execute(
+            "SELECT level,m.name FROM source_quant_methods q "
+            "JOIN quant_methods m USING(method_id) ORDER BY level"
+        ).fetchall() == [("peptide", "ProteinQuantifier"),
+                         ("protein_group", "ProteinQuantifier")]
+        assert connection.execute(
             "SELECT acquisition_mode, inference_route FROM qc_metrics"
         ).fetchone() == ("DDA", "ProteinProphet")
         assert connection.execute(
@@ -131,6 +136,21 @@ def test_tmt_detailed_abundance_headers(tmp_path):
     assert VaultBuilder(root, output, tmt_channel_csv=channels).build()[
         "validation"
     ]["valid"]
+
+
+def test_empty_peptide_quant_file_retains_its_method(tmp_path):
+    root = dda_output(tmp_path, "LFQ")
+    peptide = next(root.rglob("TEST_ProteinQuantifier_peptide.csv"))
+    peptide.write_text("\n".join(peptide.read_text().splitlines()[:-1]) + "\n")
+    output = tmp_path / "empty_peptide.duckdb"
+    assert VaultBuilder(root, output).build()["validation"]["valid"]
+    with duckdb.connect(str(output), read_only=True) as connection:
+        assert connection.execute("SELECT count(*) FROM peptide_quant").fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT m.name FROM source_quant_methods q "
+            "JOIN quant_methods m USING(method_id) "
+            "WHERE q.level='peptide'"
+        ).fetchall() == [("ProteinQuantifier",)]
 
 
 def test_tmt_numbered_sample_headers_without_reference(tmp_path):
@@ -206,8 +226,11 @@ def test_tmt_omitted_reporter_is_retained_without_shifting_columns(tmp_path):
         ).fetchone()[0] == 100
 
 
-@pytest.mark.parametrize("mode", ["ScanBased", "FeatureBased"])
-def test_tmt_consensus_preserves_repeated_precursor_observations(tmp_path, mode):
+@pytest.mark.parametrize(("mode", "quasi"), [
+    ("ScanBased", None), ("FeatureBased", None),
+    ("FeatureBased", True), ("FeatureBased", False),
+])
+def test_tmt_consensus_preserves_repeated_precursor_observations(tmp_path, mode, quasi):
     root = dda_output(tmp_path, "TMT")
     workflow = next(root.rglob("main_workflow"))
     (workflow / "quantitate-ProteomicTMT-1.0.0").rmdir()
@@ -268,8 +291,13 @@ def test_tmt_consensus_preserves_repeated_precursor_observations(tmp_path, mode)
             <PeptideHit sequence="PEPTIDE(TMTpro)" charge="2"/>
             <PeptideHit sequence="OTHER(TMTpro)" charge="2"/>
           </PeptideIdentification></consensusElement>''')
+    processing = ('' if quasi is None else
+                  '<dataProcessing><software name="msptools::MADNormalizer"/>'
+                  f'<UserParam name="parameter: quasi_intensity" value="{int(quasi)}"/>'
+                  '</dataProcessing>')
     (output_dir / "TEST_IDConflictResolver.consensusXML").write_text(
-        '<consensusXML><mapList><map id="0" name="plex_01" label="tmt10plex_126"/>'
+        '<consensusXML>' + processing +
+        '<mapList><map id="0" name="plex_01" label="tmt10plex_126"/>'
         '<map id="1" name="plex_01" label="tmt10plex_127N"/></mapList>'
         + "".join(features) + '</consensusXML>')
     channels = tmp_path / "channel.csv"
@@ -283,7 +311,19 @@ def test_tmt_consensus_preserves_repeated_precursor_observations(tmp_path, mode)
     assert any("no_hit" in warning for warning in warnings)
     assert any(("no_accepted_psm" if mode == "ScanBased" else
                 "ambiguous_identification") in warning for warning in warnings)
+    if mode == "FeatureBased" and quasi is not True:
+        assert any("quasi-intensity normalization was not used" in warning
+                   for warning in warnings)
     with duckdb.connect(str(output), read_only=True) as connection:
+        scale = connection.execute(
+            "SELECT value FROM metadata WHERE key LIKE 'tmt_quantity_scale:%'"
+        ).fetchone()[0]
+        assert scale == ("intensity" if quasi is None else
+                         "quasi_intensity" if quasi else "log2_ratio")
+        assert connection.execute(
+            "SELECT q.level,m.name FROM source_quant_methods q "
+            "JOIN quant_methods m USING(method_id) WHERE m.name LIKE 'TMT.%'"
+        ).fetchall() == [("precursor", f"TMT.{mode}")]
         rows = connection.execute(
             "SELECT sample_name,quantity,rt_seconds,spectrum_id,source_element_id "
             "FROM precursor_quant_long ORDER BY sample_name,rt_seconds"
@@ -331,3 +371,49 @@ def test_two_plex_protein_columns_require_explicit_identity(tmp_path, explicit_p
         assert connection.execute(
             "SELECT sample_name,quantity FROM protein_quant_long ORDER BY sample_name"
         ).fetchall() == [("plex_01|126", 100), ("plex_02|126", 200)]
+
+
+@pytest.mark.parametrize("bad_description", [False, True])
+def test_two_plex_protein_headers_with_channel_descriptions(tmp_path, bad_description):
+    root = dda_output(tmp_path, "TMT")
+    workflow = next(root.rglob("main_workflow"))
+    manifest = workflow / "manifests/qc-mzml.csv"
+    manifest.write_text(manifest.read_text().replace(
+        "plex_01,2,/data/fraction_2.mzML", "plex_02,1,/data/fraction_2.mzML"
+    ))
+    output_dir = next(root.rglob("OpenMS-3.5.0/output"))
+    protein = output_dir / "TEST_ProteinQuantifier_protein.csv"
+    protein.write_text(
+        '"protein"\t"n_proteins"\t"protein_score"\t"n_peptides"\t'
+        '"abundance|plex_01|ch1|reference"\t'
+        '"abundance|plex_01|ch2|treated_01"\t'
+        '"abundance|plex_02|ch1|reference"\t'
+        f'"abundance|plex_02|ch2|{"wrong" if bad_description else "treated_02"}"\n'
+        '"P1/P2"\t2\t0.9\t1\t100\t200\t300\t400\n'
+    )
+    peptide = output_dir / "TEST_ProteinQuantifier_peptide.csv"
+    peptide.write_text(peptide.read_text().replace(
+        '"abundance_1"', '"abundance|plex_01|ch1"'
+    ).replace('"abundance_2"', '"abundance|plex_02|ch1"'))
+    channels = tmp_path / "channel.csv"
+    channels.write_text(
+        "plex_id,channel,description\n"
+        "plex_01,126,reference\nplex_01,127N,treated_01\n"
+        "plex_02,126,reference\nplex_02,127N,treated_02\n"
+    )
+    output = tmp_path / "described.duckdb"
+    if bad_description:
+        with pytest.raises(ValueError, match="TMT channel description mismatch"):
+            VaultBuilder(root, output, tmt_channel_csv=channels).build()
+        assert not output.exists()
+        return
+    assert VaultBuilder(root, output, tmt_channel_csv=channels).build()[
+        "validation"
+    ]["valid"]
+    with duckdb.connect(str(output), read_only=True) as connection:
+        assert connection.execute(
+            "SELECT sample_name,quantity FROM protein_quant_long ORDER BY sample_name"
+        ).fetchall() == [
+            ("plex_01|126", 100), ("plex_01|127N", 200),
+            ("plex_02|126", 300), ("plex_02|127N", 400),
+        ]

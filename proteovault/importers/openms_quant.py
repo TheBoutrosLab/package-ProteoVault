@@ -39,6 +39,8 @@ class OpenMSQuantImporter(BaseImporter):
             if not abundance:
                 raise ValueError(f"No ProteinQuantifier abundance columns: {self.path}")
             column_map = self.column_map(comments, abundance)
+            self.database.register_quant_method(self.source_id, entity,
+                                                "ProteinQuantifier")
             for row_number, row in enumerate(reader, start=1):
                 source_value = row[feature_name]
                 if not source_value:
@@ -100,7 +102,9 @@ class OpenMSQuantImporter(BaseImporter):
         mapped = {}
         for column in abundance:
             number = re.fullmatch(r"abundance_(\d+)", column)
-            detailed = re.fullmatch(r"abundance\|(.+)\|ch(\d+)", column)
+            detailed = re.fullmatch(
+                r"abundance\|([^|]+)\|ch(\d+)(?:\|([^|]+))?", column
+            )
             numbered_sample = re.fullmatch(
                 r"abundance_sample(\d+)\[[^]]*\]", column
             )
@@ -115,12 +119,21 @@ class OpenMSQuantImporter(BaseImporter):
                 else:
                     key = sample
             elif detailed:
-                sample, index = detailed.group(1), int(detailed.group(2))
+                sample, index, description = (
+                    detailed.group(1), int(detailed.group(2)), detailed.group(3)
+                )
                 if self.database.dda_mode == "TMT":
                     labels = self.database.dda_reporters.get(sample)
                     if not labels or index < 1 or index > len(labels):
                         raise ValueError(f"Unmapped TMT column: {column}")
                     key = (sample, labels[index - 1])
+                    expected = self.database.dda_channel_descriptions.get(key)
+                    if (description is not None and expected is not None
+                            and description != expected):
+                        raise ValueError(
+                            f"TMT channel description mismatch for {column}: "
+                            f"expected {expected!r} for {sample}|{key[1]}"
+                        )
                 else:
                     key = sample
             elif numbered_sample and self.database.dda_mode == "TMT":

@@ -42,6 +42,19 @@ class DIANNImporter(BaseImporter):
                 name for name in ("PG.Quantity", "PG.Normalised", "PG.MaxLFQ", "PG.TopN")
                 if not is_matrix and self.stage == "quantitation" and name in fields
             )
+            if is_matrix:
+                table = "precursor_quant" if precursor else "protein_quant"
+                self.database.register_quant_method(self.source_id, table, "matrix")
+            else:
+                if precursor:
+                    for name in ("Precursor.Quantity", "Precursor.Normalised",
+                                 "Precursor.Translated"):
+                        if name in fields:
+                            self.database.register_quant_method(
+                                self.source_id, "precursor_quant", name)
+                for name in protein_methods:
+                    self.database.register_quant_method(
+                        self.source_id, "protein_quant", name)
             protein_values = {}
             seen = set()
             self.groups = {}

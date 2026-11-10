@@ -23,6 +23,7 @@ class ProteoVaultDatabase:
         self.column_sets: dict[str, set[str]] = {}
         self.arrow_schemas: dict[str, pa.Schema] = {}
         self.sample_manifest = None
+        self.registered_quant_methods: set[tuple[int, str, str]] = set()
 
     def __enter__(self):
         return self
@@ -95,7 +96,10 @@ class ProteoVaultDatabase:
             lookup_table, id_field = lookup[field]
             label = values.pop(field)
             identifier = self.identity(lookup_table, label) & ((1 << 31) - 1)
-            self.add(lookup_table, **{id_field: identifier, "name": label})
+            if field == "method":
+                self.register_quant_method(values["source_id"], table, label)
+            else:
+                self.add(lookup_table, **{id_field: identifier, "name": label})
             values[id_field] = identifier
         unknown = values.keys() - self.column_sets[table]
         if unknown:
@@ -108,6 +112,23 @@ class ProteoVaultDatabase:
                 **{name: value for name, value in values.items() if value is not None},
             }
         self.buffers[table][key] = values
+
+    def register_quant_method(self, source_id: int, table: str, method: str):
+        """Record an available source/method, including sources with no quantity rows."""
+        levels = {
+            "protein_quant": "protein_group",
+            "precursor_quant": "precursor",
+            "peptide_quant": "peptide",
+        }
+        level = levels[table]
+        key = (source_id, level, method)
+        if key in self.registered_quant_methods:
+            return
+        method_id = self.identity("quant_methods", method) & ((1 << 31) - 1)
+        self.add("quant_methods", method_id=method_id, name=method)
+        self.add("source_quant_methods", source_id=source_id,
+                 level=level, method_id=method_id)
+        self.registered_quant_methods.add(key)
 
     def flush(self):
         """Insert bounded Arrow batches in schema dependency order."""
@@ -125,6 +146,7 @@ class ProteoVaultDatabase:
             "score_types",
             "score_aliases",
             "quant_methods",
+            "source_quant_methods",
             "grouping_methods",
             "psms",
             "psm_scores",

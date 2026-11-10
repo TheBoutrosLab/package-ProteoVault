@@ -68,6 +68,9 @@ class TMTChannelManifestImporter(BaseImporter):
                     channel_description=declarations.get((plex_name, reporter)),
                 )
                 self.database.dda_channels[(plex_name, reporter)] = channel
+                self.database.dda_channel_descriptions[(plex_name, reporter)] = (
+                    declarations.get((plex_name, reporter))
+                )
                 self.counts["tmt_channels"] += 1
             self.database.add(
                 "tmt_plexes", plex_id=plex, plex_name=plex_name,

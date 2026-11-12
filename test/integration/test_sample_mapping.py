@@ -59,7 +59,7 @@ class TestSampleMapping:
             ).fetchall() == [("Biological_sample_2", None), ("S1", None)]
             assert connection.execute(
                 "SELECT sample_name,quantity FROM protein_quant_long "
-                "WHERE quantity IS NOT NULL ORDER BY sample_name"
+                "WHERE quantity IS NOT NULL ORDER BY sample_name,quantity"
             ).fetchall() == [("Biological_sample_2", 200), ("S1", 0), ("S1", 100)]
             assert connection.execute(
                 "SELECT sample_name FROM precursor_quant_long "

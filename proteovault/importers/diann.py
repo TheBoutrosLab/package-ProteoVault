@@ -30,7 +30,10 @@ class DIANNImporter(BaseImporter):
                         f"Missing precursor columns in {self.path}: {sorted(required - set(fields))}"
                     )
             channels = [
-                f for f in fields if f.lower().endswith((".raw", ".mzml", ".d"))
+                f for f in fields
+                if f.lower().endswith((".raw", ".mzml", ".d"))
+                or (is_matrix and self.database.sample_manifest
+                    and f in self.database.sample_manifest.samples)
             ]
             if is_matrix and not channels:
                 raise ValueError(f"No sample columns in {self.path}")
@@ -62,7 +65,11 @@ class DIANNImporter(BaseImporter):
             self.mappings = set()
             self.channel_ids = (
                 {
-                    column: self.database.channel(self.run_name(column), column)
+                    column: self.database.channel(
+                        self.run_name(column),
+                        column if column.lower().endswith((".raw", ".mzml", ".d"))
+                        else None,
+                    )
                     for column in channels
                 }
                 if is_matrix

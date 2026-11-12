@@ -23,6 +23,52 @@ TEST_FIXTURES = Path(__file__).parents[1] / "fixtures"
 
 
 class TestSampleMapping:
+    def test_fractionated_dia_uses_sample_matrix_columns(self, pipeline, tmp_path):
+        workflow = pipeline / "metapipeline-ProteomicDIA-1.3.0/TEST/main_workflow"
+        manifests = workflow / "manifests"
+        manifests.mkdir()
+        (manifests / "quantitation.csv").write_text(
+            "annotation_id,path,sample_name,fraction_id\n"
+            "A,/raw/S1_f1.mzML,S1,F1\nA,/raw/S1_f2.mzML,S1,F2\n"
+            "B,/raw/S2_f1.mzML,Biological_sample_2,F1\n"
+            "B,/raw/S2_f2.mzML,Biological_sample_2,F2\n"
+        )
+        quant = next(workflow.glob("quantitate-ProteomicDIA-*/*/output/DIA-NN"))
+        for suffix in ("pg_matrix", "pr_matrix"):
+            matrix = quant / f"TEST-report.{suffix}.tsv"
+            matrix.write_text(matrix.read_text().replace(
+                "/raw/S1.mzML", "S1"
+            ).replace("/raw/S2.mzML", "Biological_sample_2"))
+        report = quant / "TEST-report.tsv"
+        lines = report.read_text().splitlines()
+        report.write_text(
+            lines[0] + "\tFile.Name\n"
+            + lines[1] + "\t/raw/S1_f2.mzML\n"
+        )
+        qc = workflow / "qc-ProteomicDIA-1.0.0/TEST/output/TEST_QC_metrics.tsv"
+        qc.parent.mkdir(parents=True)
+        shutil.copyfile(TEST_FIXTURES / "cohort_qc.tsv", qc)
+        output = tmp_path / "fractionated.duckdb"
+        assert VaultBuilder(pipeline, output).build()["validation"]["valid"]
+        with duckdb.connect(str(output), read_only=True) as connection:
+            assert connection.execute(
+                "SELECT sample_name FROM samples ORDER BY sample_name"
+            ).fetchall() == [("Biological_sample_2",), ("S1",)]
+            assert connection.execute(
+                "SELECT run_name,file_name FROM runs ORDER BY run_name"
+            ).fetchall() == [("Biological_sample_2", None), ("S1", None)]
+            assert connection.execute(
+                "SELECT sample_name,quantity FROM protein_quant_long "
+                "WHERE quantity IS NOT NULL ORDER BY sample_name"
+            ).fetchall() == [("Biological_sample_2", 200), ("S1", 0), ("S1", 100)]
+            assert connection.execute(
+                "SELECT sample_name FROM precursor_quant_long "
+                "WHERE method='Precursor.Quantity' AND quantity=19"
+            ).fetchall() == [("S1",)]
+            assert connection.execute(
+                "SELECT DISTINCT sample_name FROM qc_metrics WHERE sample_name != ''"
+            ).fetchall() == [("S1",)]
+
     def test_published_quantitation_manifest_sets_canonical_samples(
         self, pipeline, tmp_path
     ):
@@ -69,6 +115,17 @@ class TestSampleMapping:
         from proteovault.sample_manifest import SampleManifest
 
         assert SampleManifest(manifest).sample_name("long") == "Short"
+
+    @pytest.mark.parametrize("header", [
+        "sample_name,path,mzML", "sample_name,path,path",
+    ])
+    def test_manifest_rejects_ambiguous_path_headers(self, tmp_path, header):
+        manifest = tmp_path / "quantitation.csv"
+        manifest.write_text(header + "\nS1,/raw/S1.mzML,/raw/S1.mzML\n")
+        from proteovault.sample_manifest import SampleManifest
+
+        with pytest.raises(ValueError, match="exactly one of path or mzML"):
+            SampleManifest(manifest)
 
     def test_qc_name_without_manifest_must_match_quantification(self, pipeline, tmp_path):
         workflow = pipeline / "metapipeline-ProteomicDIA-1.3.0/TEST/main_workflow"

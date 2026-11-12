@@ -14,12 +14,17 @@ class SampleManifest:
         self.samples = set()
         with self.path.open(encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle)
-            if reader.fieldnames not in (["sample_name", "path"], ["sample_name", "mzML"]):
+            fields = reader.fieldnames or []
+            path_columns = set(fields) & {"path", "mzML"}
+            if (len(fields) != len(set(fields)) or "sample_name" not in fields
+                    or len(path_columns) != 1):
                 raise ValueError(
                     f"Unexpected quantitation manifest columns in {self.path}; "
-                    "expected sample_name,path or sample_name,mzML"
+                    "require sample_name and exactly one of path or mzML "
+                    "without duplicate headers"
                 )
-            path_column = reader.fieldnames[1]
+            path_column = path_columns.pop()
+            fractions = set()
             for line, row in enumerate(reader, start=2):
                 sample = (row["sample_name"] or "").strip()
                 acquisition = (row[path_column] or "").strip()
@@ -27,6 +32,14 @@ class SampleManifest:
                     raise ValueError(
                         f"Incomplete quantitation manifest row: {self.path}:{line}"
                     )
+                if "fraction_id" in fields:
+                    fraction = (row["fraction_id"] or "").strip()
+                    if not fraction or (sample, fraction) in fractions:
+                        raise ValueError(
+                            f"Missing or duplicate fraction for {sample}: "
+                            f"{self.path}:{line}"
+                        )
+                    fractions.add((sample, fraction))
                 normalized = acquisition.replace("\\", "/")
                 stem = Path(normalized).name
                 for suffix in (".mzML", ".raw", ".d"):
@@ -48,6 +61,8 @@ class SampleManifest:
         normalized = acquisition.replace("\\", "/")
         if normalized in self.by_path:
             return self.by_path[normalized]
+        if normalized in self.samples:
+            return normalized
         stem = Path(normalized).name
         for suffix in (".mzML", ".raw", ".d"):
             if stem.lower().endswith(suffix.lower()):

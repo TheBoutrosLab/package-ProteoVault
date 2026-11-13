@@ -22,13 +22,6 @@ class QCImporter(BaseImporter):
         "status",
         "source_file",
     ]
-    DDA_FIELDS = [
-        "dataset_id", "acquisition_mode", "layer", "sample_name",
-        "fraction_id", "search_engine", "inference_route", "source_process",
-        "metric_name", "group", "value", "unit", "status", "source_file",
-        "calculation_version",
-    ]
-
     def import_data(self) -> dict[str, int]:
         dataset, pipeline = self.database.connection.execute(
             "SELECT dataset_id, pipeline FROM analysis"
@@ -50,7 +43,7 @@ class QCImporter(BaseImporter):
         self.counts = {"qc_metrics": 0}
         with self.path.open(encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
-            if reader.fieldnames != (self.DDA_FIELDS if dda else self.FIELDS):
+            if reader.fieldnames != self.FIELDS:
                 raise ValueError(
                     f"Unexpected cohort QC columns in {self.path}: {reader.fieldnames}"
                 )
@@ -89,12 +82,12 @@ class QCImporter(BaseImporter):
                     source_id=self.source_id,
                     row_number=row_number,
                     dataset_id=row["dataset_id"],
-                    acquisition_mode=row.get("acquisition_mode"),
+                    acquisition_mode="DDA" if dda else None,
                     layer=row["layer"],
                     source_process=row["source_process"],
                     sample_name=sample_name,
                     search_engine=row["search_engine"],
-                    inference_route=row.get("inference_route"),
+                    inference_route=None,
                     fraction_id=row["fraction_id"],
                     metric_name=row["metric_name"],
                     group=row["group"],
@@ -102,7 +95,7 @@ class QCImporter(BaseImporter):
                     unit=row["unit"],
                     status=row["status"],
                     source_file=row["source_file"],
-                    calculation_version=row.get("calculation_version"),
+                    calculation_version=None,
                 )
                 self.counts["qc_metrics"] += 1
                 if row_number % 5000 == 0:

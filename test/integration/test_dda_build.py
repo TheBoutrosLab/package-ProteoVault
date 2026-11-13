@@ -36,6 +36,7 @@ def dda_output(tmp_path, mode):
     else:
         manifest.write_text(
             "sample_name,fraction_id,path\nS1,1,/data/S1.mzML\n"
+            "S1,2,/data/S1_f2.mzML\n"
             "S2,1,/data/S2.mzML\n"
         )
         comments = (
@@ -58,13 +59,14 @@ def dda_output(tmp_path, mode):
     shutil.copy(INFERENCE, output / "TEST_ProteinProphet_filtered.idXML")
     qc = workflow / "qc-ProteomicDDA-1.0.0/TEST/output/TEST_QC_metrics.tsv"
     qc.parent.mkdir(parents=True)
+    qc_sample = "plex_01" if mode == "TMT" else "S1"
     qc.write_text(
-        "dataset_id\tacquisition_mode\tlayer\tsample_name\tfraction_id\t"
-        "search_engine\tinference_route\tsource_process\tmetric_name\tgroup\t"
-        "value\tunit\tstatus\tsource_file\tcalculation_version\n"
-        f"TEST\tDDA\tquantification\t{'plex_01' if mode == 'TMT' else 'S1'}\t\t"
-        "\tProteinProphet\tsummarize_ProteinQuantifier\t"
-        "quantified_feature_count\tall\t1\tcount\tavailable\tprotein.csv\t1.0.0\n"
+        "dataset_id\tlayer\tsource_process\tsample_name\tsearch_engine\t"
+        "fraction_id\tmetric_name\tgroup\tvalue\tunit\tstatus\tsource_file\n"
+        f"TEST\tacquisition\tsummarize_mzML\t{qc_sample}\t\t1\t"
+        "ms2_count\tall\t100\tcount\tavailable\tfraction_1.mzML\n"
+        f"TEST\tacquisition\tsummarize_mzML\t{qc_sample}\t\t2\t"
+        "ms2_count\treference\t120\tcount\tavailable\tfraction_2.mzML\n"
     )
     return root
 
@@ -99,8 +101,15 @@ def test_dda_quantitation_and_channel_identity(tmp_path, mode):
         ).fetchall() == [("peptide", "ProteinQuantifier"),
                          ("protein_group", "ProteinQuantifier")]
         assert connection.execute(
-            "SELECT acquisition_mode, inference_route FROM qc_metrics"
-        ).fetchone() == ("DDA", "ProteinProphet")
+            'SELECT acquisition_mode, inference_route, calculation_version, '
+            'sample_name, fraction_id, "group", value FROM qc_metrics '
+            'ORDER BY row_number'
+        ).fetchall() == [
+            ("DDA", None, None, "plex_01" if mode == "TMT" else "S1",
+             "1", "all", "100"),
+            ("DDA", None, None, "plex_01" if mode == "TMT" else "S1",
+             "2", "reference", "120"),
+        ]
         assert connection.execute(
             "SELECT charge FROM peptide_quant_features"
         ).fetchone()[0] == 0
@@ -110,6 +119,10 @@ def test_dda_quantitation_and_channel_identity(tmp_path, mode):
         ).fetchone() == ("PEPTIDE", "PEPTIDE(TMTpro)")
         if mode == "TMT":
             assert connection.execute("SELECT count(*) FROM tmt_runs").fetchone()[0] == 2
+            assert connection.execute(
+                "SELECT reporter_label, channel_description FROM tmt_channels "
+                "WHERE channel_description IS NOT NULL ORDER BY reporter_label"
+            ).fetchall() == [("126", "reference"), ("127N", "treated")]
             assert connection.execute(
                 "SELECT s.sample_name FROM tmt_plexes p "
                 "JOIN quant_channels c ON p.reference_channel_id=c.channel_id "

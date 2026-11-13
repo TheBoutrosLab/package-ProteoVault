@@ -4,6 +4,8 @@ All notable changes to ProteoVault are documented here.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-13
+
 ### Fixed
 
 - Import the 12-column QC v1.2.0 DDA metrics table directly for LFQ and TMT analyses.
@@ -86,4 +88,5 @@ All notable changes to ProteoVault are documented here.
 [0.2.0]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.1.0...v0.2.0
 [0.2.1]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.0...v0.2.1
 [0.2.2]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.1...v0.2.2
-[unreleased]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.2...HEAD
+[0.2.3]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.2...v0.2.3
+[unreleased]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.3...HEAD

@@ -152,7 +152,8 @@ class PipelineOutputDiscovery:
             artifacts.append(self.artifact(run_manifest, "dda_run_manifest", "design"))
             validation = self.child_pipeline(workflow, "validate-ProteomicPSM-*")
             if validation:
-                artifacts.extend(self.artifact(path, "idxml", "validation")
+                artifacts.extend(self.artifact(path, "idxml", "validation",
+                                               path.parents[2].name)
                                  for path in sorted(validation.glob(
                                      "*/OpenMS-*/output/*_filter.idXML")))
             if len(protein_roots) != 1:

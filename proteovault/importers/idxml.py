@@ -1,5 +1,6 @@
 """Stream OpenMS idXML while retaining source-specific PSM stages and group types."""
 
+import csv
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -49,14 +50,23 @@ class IdXMLImporter(BaseImporter):
 
     def import_data(self) -> dict[str, int]:
         self.counts = {"psms": 0, "inference_groups": 0, "protein_hits": 0}
-        self.run_id = (
-            self.database.resolve_run(self.sample_name) if self.sample_name else None
+        dda_validation = (
+            getattr(self.database, "is_dda", False) and self.stage == "validation"
         )
-        self.dda_runs = {}
-        if getattr(self.database, "is_dda", False) and self.stage == "validation":
+        self.run_id = (
+            self.database.resolve_run(self.sample_name)
+            if self.sample_name and not dda_validation else None
+        )
+        self.dda_runs = []
+        self.spectra_data = []
+        if dda_validation:
             self.database.flush()
-            self.dda_runs = dict(self.database.connection.execute(
-                "SELECT run_name,run_id FROM runs").fetchall())
+            self.dda_runs = self.database.connection.execute(
+                "SELECT r.run_name, r.run_id, s.sample_name, p.plex_name "
+                "FROM runs r LEFT JOIN samples s ON r.sample_id=s.sample_id "
+                "LEFT JOIN tmt_runs tr ON r.run_id=tr.run_id "
+                "LEFT JOIN tmt_plexes p ON tr.plex_id=p.plex_id"
+            ).fetchall()
         refs = {}
         engine = "unknown"
         protein_score_type = None
@@ -75,8 +85,21 @@ class IdXMLImporter(BaseImporter):
                     self.identification_run_index = identification_run_index
                     refs = {}
                     group_parameters = []
+                    self.spectra_data = []
                     engine = element.get("search_engine", "unknown")
                 continue
+            if tag == "UserParam" and element.get("name") == "spectra_data":
+                parent_tag = (
+                    stack[-2].tag.rsplit("}", 1)[-1] if len(stack) > 1 else None
+                )
+                if parent_tag in ("ProteinIdentification", "IdentificationRun"):
+                    value = element.get("value", "").strip()
+                    if value.startswith("[") and value.endswith("]"):
+                        value = value[1:-1]
+                    self.spectra_data = [
+                        part.strip()
+                        for part in next(csv.reader([value], skipinitialspace=True))
+                    ]
             if tag == "ProteinHit":
                 accession = element.get("accession", "")
                 if not accession:
@@ -152,11 +175,7 @@ class IdXMLImporter(BaseImporter):
             )
         run = self.run_id
         if self.dda_runs:
-            base = metadata.get("base_name", "").replace("\\", "/")
-            name = Path(base).name
-            if name not in self.dda_runs:
-                raise ValueError(f"Unknown DDA run {name!r} in {self.path}")
-            run = self.dda_runs[name]
+            run = self.resolve_dda_run(metadata, index, native)
         spectrum = self.database.identity("spectrum", run, native)
         self.database.add(
             "spectra",
@@ -277,3 +296,39 @@ class IdXMLImporter(BaseImporter):
                     protein_id=refs[reference][0],
                 )
             self.counts["psms"] += 1
+
+    def resolve_dda_run(self, metadata, index, native):
+        """Resolve a validated identification to one manifest mzML within its sample."""
+        context = f"{self.path}, identification {index} ({native})"
+        base = metadata.get("base_name", "").strip()
+        if base:
+            source = base
+        else:
+            if not self.spectra_data or any(not path for path in self.spectra_data):
+                raise ValueError(f"Missing DDA spectra_data in {context}")
+            merge_index = metadata.get("id_merge_index", "").strip()
+            if len(self.spectra_data) == 1 and not merge_index:
+                position = 0
+            else:
+                try:
+                    position = int(merge_index)
+                except ValueError as error:
+                    raise ValueError(
+                        f"Invalid DDA id_merge_index {merge_index!r} in {context}"
+                    ) from error
+                if position < 0 or position >= len(self.spectra_data):
+                    raise ValueError(
+                        f"Invalid DDA id_merge_index {position} in {context}"
+                    )
+            source = self.spectra_data[position]
+        name = self.run_name(source)
+        matches = [
+            run_id for run_name, run_id, sample, plex in self.dda_runs
+            if run_name == name and self.sample_name in (sample, plex)
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"Expected one DDA run for {source!r} in sample/plex "
+                f"{self.sample_name!r}; found {len(matches)} in {context}"
+            )
+        return matches[0]

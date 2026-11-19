@@ -130,6 +130,133 @@ def test_dda_quantitation_and_channel_identity(tmp_path, mode):
             ).fetchone()[0] == "plex_01|126"
 
 
+@pytest.mark.parametrize("mode", ["LFQ", "TMT"])
+def test_dda_sage_idxml_resolves_two_fraction_runs(tmp_path, mode):
+    root = dda_output(tmp_path, mode)
+    workflow = next(root.rglob("main_workflow"))
+    sample = "S1" if mode == "LFQ" else "plex_01"
+    files = ("S1", "S1_f2") if mode == "LFQ" else ("fraction_1", "fraction_2")
+    filtered = (workflow / "validate-ProteomicPSM-1.0.0" / sample /
+                "OpenMS-3.5.0/output" / f"{sample}_filter.idXML")
+    filtered.parent.mkdir(parents=True)
+    filtered.write_text(
+        '<IdXML><IdentificationRun search_engine="Sage">'
+        '<ProteinIdentification><UserParam name="spectra_data" '
+        f'value="[/data/{files[0]}.mzML, /data/{files[1]}.mzML]"/>'
+        '</ProteinIdentification>'
+        '<PeptideIdentification spectrum_reference="scan=1" RT="100" MZ="500">'
+        '<UserParam name="id_merge_index" value="0"/>'
+        '<PeptideHit sequence="PEPTIDE" charge="2" score="0.01"/>'
+        '</PeptideIdentification>'
+        '<PeptideIdentification spectrum_reference="scan=1" RT="200" MZ="500">'
+        '<UserParam name="id_merge_index" value="1"/>'
+        '<PeptideHit sequence="PEPTIDE" charge="2" score="0.02"/>'
+        '</PeptideIdentification>'
+        '</IdentificationRun></IdXML>'
+    )
+    channels = tmp_path / "channel.csv"
+    if mode == "TMT":
+        channels.write_text("plex_id,channel,description\n"
+                            "plex_01,126,reference\nplex_01,127N,treated\n")
+    output = tmp_path / "sage.duckdb"
+    assert VaultBuilder(root, output, tmt_channel_csv=channels if mode == "TMT"
+                        else None).build()["validation"]["valid"]
+    with duckdb.connect(str(output), read_only=True) as connection:
+        assert connection.execute(
+            "SELECT r.run_name, s.native_id FROM psms p "
+            "JOIN spectra s USING(spectrum_id) JOIN runs r USING(run_id) "
+            "ORDER BY r.run_name"
+        ).fetchall() == [(name, "scan=1") for name in files]
+
+
+@pytest.mark.parametrize("metadata,expected", [
+    ('<UserParam name="id_merge_index" value="2"/>', "Invalid DDA id_merge_index"),
+    ('<UserParam name="id_merge_index" value="bad"/>', "Invalid DDA id_merge_index"),
+    ("", "Invalid DDA id_merge_index"),
+])
+def test_dda_sage_idxml_rejects_unresolved_fraction(tmp_path, metadata, expected):
+    root = dda_output(tmp_path, "LFQ")
+    workflow = next(root.rglob("main_workflow"))
+    filtered = (workflow / "validate-ProteomicPSM-1.0.0/S1/"
+                "OpenMS-3.5.0/output/S1_filter.idXML")
+    filtered.parent.mkdir(parents=True)
+    filtered.write_text(
+        '<IdXML><IdentificationRun search_engine="Sage">'
+        '<ProteinIdentification><UserParam name="spectra_data" '
+        'value="[/data/S1.mzML, /data/S1_f2.mzML]"/></ProteinIdentification>'
+        '<PeptideIdentification spectrum_reference="scan=1">'
+        + metadata + '<PeptideHit sequence="PEPTIDE" charge="2" score="0.01"/>'
+        '</PeptideIdentification></IdentificationRun></IdXML>'
+    )
+    with pytest.raises(ValueError, match=expected + ".*identification 1"):
+        VaultBuilder(root, tmp_path / "invalid.duckdb").build()
+
+
+def test_dda_msfragger_base_name_takes_precedence(tmp_path):
+    root = dda_output(tmp_path, "LFQ")
+    workflow = next(root.rglob("main_workflow"))
+    filtered = (workflow / "validate-ProteomicPSM-1.0.0/S1/"
+                "OpenMS-3.5.0/output/S1_filter.idXML")
+    filtered.parent.mkdir(parents=True)
+    filtered.write_text(
+        '<IdXML><IdentificationRun search_engine="MSFragger">'
+        '<PeptideIdentification spectrum_reference="scan=1">'
+        '<UserParam name="base_name" value="/data/S1_f2.mzML"/>'
+        '<PeptideHit sequence="PEPTIDE" charge="2" score="0.01"/>'
+        '</PeptideIdentification></IdentificationRun></IdXML>'
+    )
+    output = tmp_path / "msfragger.duckdb"
+    assert VaultBuilder(root, output).build()["validation"]["valid"]
+    with duckdb.connect(str(output), read_only=True) as connection:
+        assert connection.execute(
+            "SELECT r.run_name FROM psms p JOIN spectra s USING(spectrum_id) "
+            "JOIN runs r USING(run_id)"
+        ).fetchall() == [("S1_f2",)]
+
+
+def test_dda_sage_single_spectra_data_without_merge_index(tmp_path):
+    root = dda_output(tmp_path, "LFQ")
+    workflow = next(root.rglob("main_workflow"))
+    filtered = (workflow / "validate-ProteomicPSM-1.0.0/S1/"
+                "OpenMS-3.5.0/output/S1_filter.idXML")
+    filtered.parent.mkdir(parents=True)
+    filtered.write_text(
+        '<IdXML><IdentificationRun search_engine="Sage">'
+        '<ProteinIdentification><UserParam name="spectra_data" '
+        'value="[/data/S1_f2.mzML]"/></ProteinIdentification>'
+        '<PeptideIdentification spectrum_reference="scan=1">'
+        '<PeptideHit sequence="PEPTIDE" charge="2" score="0.01"/>'
+        '</PeptideIdentification></IdentificationRun></IdXML>'
+    )
+    output = tmp_path / "single.duckdb"
+    assert VaultBuilder(root, output).build()["validation"]["valid"]
+    with duckdb.connect(str(output), read_only=True) as connection:
+        assert connection.execute(
+            "SELECT r.run_name FROM psms p JOIN spectra s USING(spectrum_id) "
+            "JOIN runs r USING(run_id)"
+        ).fetchall() == [("S1_f2",)]
+
+
+def test_dda_sage_spectra_data_must_match_sample_manifest(tmp_path):
+    root = dda_output(tmp_path, "LFQ")
+    workflow = next(root.rglob("main_workflow"))
+    filtered = (workflow / "validate-ProteomicPSM-1.0.0/S1/"
+                "OpenMS-3.5.0/output/S1_filter.idXML")
+    filtered.parent.mkdir(parents=True)
+    filtered.write_text(
+        '<IdXML><IdentificationRun search_engine="Sage">'
+        '<ProteinIdentification><UserParam name="spectra_data" '
+        'value="[/data/S2.mzML]"/></ProteinIdentification>'
+        '<PeptideIdentification spectrum_reference="scan=1">'
+        '<PeptideHit sequence="PEPTIDE" charge="2" score="0.01"/>'
+        '</PeptideIdentification></IdentificationRun></IdXML>'
+    )
+    with pytest.raises(
+        ValueError, match="Expected one DDA run.*sample/plex 'S1'.*identification 1"
+    ):
+        VaultBuilder(root, tmp_path / "wrong_sample.duckdb").build()
+
+
 def test_tmt_detailed_abundance_headers(tmp_path):
     root = dda_output(tmp_path, "TMT")
     output_dir = next(root.rglob("OpenMS-3.5.0/output"))

@@ -4,6 +4,8 @@ All notable changes to ProteoVault are documented here.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-19
+
 ## [0.2.3] - 2026-11-13
 
 ### Fixed
@@ -89,4 +91,5 @@ All notable changes to ProteoVault are documented here.
 [0.2.1]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.0...v0.2.1
 [0.2.2]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.1...v0.2.2
 [0.2.3]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.2...v0.2.3
-[unreleased]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.3...HEAD
+[0.2.4]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.3...v0.2.4
+[unreleased]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.4...HEAD

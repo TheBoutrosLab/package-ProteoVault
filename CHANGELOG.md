@@ -4,6 +4,8 @@ All notable changes to ProteoVault are documented here.
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-11-20
+
 ### Changed
 
 - Migrate the package license from GPL to BSD 3-Clause and update license documentation and package metadata.
@@ -99,4 +101,5 @@ All notable changes to ProteoVault are documented here.
 [0.2.3]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.2...v0.2.3
 [0.2.4]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.3...v0.2.4
 [0.2.5]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.4...v0.2.5
-[unreleased]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.5...HEAD
+[0.2.6]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.5...v0.2.6
+[unreleased]: https://github.com/TheBoutrosLab/package-ProteoVault/compare/v0.2.6...HEAD

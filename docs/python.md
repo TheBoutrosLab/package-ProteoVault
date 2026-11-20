@@ -6,6 +6,7 @@ from proteovault import VaultBuilder, VaultFastaAdder, VaultInspector, VaultLaye
 builder = VaultBuilder(
     pipeline_output="/path/to/metapipeline-output",
     output="/path/to/results.proteovault.duckdb",
+    workflow_type="DIA",  # Optional; use "DDA" for DDA output.
     fasta="/path/to/the-search-target-decoy.fasta",
 )
 plan = builder.plan()

@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 class ImportCoordinator:
     """Register sources and dispatch format importers within the caller's transaction."""
 
-    def __init__(self, database, root, pipeline, acquisition_mode):
+    def __init__(self, database, root, workflow_type, acquisition_mode):
         self.database = database
         self.manifest = SourceManifest(root)
-        workflow, _ = PipelineOutputDiscovery(root).analysis()
-        self.database.is_dda = pipeline == "metapipeline-ProteomicDDA"
+        workflow, _ = PipelineOutputDiscovery(root, workflow_type).analysis()
+        self.database.is_dda = workflow_type == "DDA"
         self.database.dda_mode = acquisition_mode
         self.database.dda_channels = {}
         self.database.dda_reporters = {}
@@ -45,7 +45,7 @@ class ImportCoordinator:
                     raise ValueError(f"Unsupported TMT plex type: {plex_type}")
                 self.database.dda_plex_type = plex_type
         manifest_path = workflow / "manifests" / "quantitation.csv"
-        if pipeline == "metapipeline-ProteomicDIA" and manifest_path.is_file():
+        if workflow_type == "DIA" and manifest_path.is_file():
             self.database.sample_manifest = SampleManifest(manifest_path)
 
     def import_artifacts(self, artifacts):

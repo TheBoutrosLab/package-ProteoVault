@@ -23,11 +23,11 @@ class QCImporter(BaseImporter):
         "source_file",
     ]
     def import_data(self) -> dict[str, int]:
-        dataset, pipeline = self.database.connection.execute(
-            "SELECT dataset_id, pipeline FROM analysis"
-        ).fetchall()[0]
-        dda = pipeline == "metapipeline-ProteomicDDA"
         self.database.flush()
+        dataset = self.database.connection.execute(
+            "SELECT dataset_id FROM analysis"
+        ).fetchone()[0]
+        dda = self.database.is_dda
         quantified_samples = {
             name for (name,) in self.database.connection.execute(
                 "SELECT DISTINCT s.sample_name FROM quant_channels c "

@@ -3,6 +3,8 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 name = "proteovault"
 requires-python = ">=3.10"
 authors = [
@@ -13,7 +15,7 @@ description = 'Portable, linked proteomics analysis results in DuckDB.'
 classifiers = [
     # Add or remove any appropriate classifiers
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU General Public License (GPL)",
+    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering",
     "Topic :: Software Development :: Libraries",

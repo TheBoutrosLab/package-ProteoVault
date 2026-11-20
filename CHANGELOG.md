@@ -4,6 +4,10 @@ All notable changes to ProteoVault are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Migrate the package license from GPL to BSD 3-Clause and update license documentation and package metadata.
+
 ## [0.2.5] - 2026-11-19
 
 ## [0.2.4] - 2026-11-19

@@ -38,6 +38,7 @@ class VaultBuilder:
         fasta: str | Path | None = None,
         uniprot_idmapping: str | Path | None = None,
         tmt_channel_csv: str | Path | None = None,
+        workflow_type: str | None = None,
     ):
         self.pipeline_output = Path(pipeline_output).expanduser().resolve()
         self.output = Path(output).expanduser().absolute()
@@ -49,6 +50,7 @@ class VaultBuilder:
         self.tmt_channel_csv = (
             Path(tmt_channel_csv).expanduser().resolve() if tmt_channel_csv else None
         )
+        self.workflow_type = workflow_type
 
     def plan(self) -> dict:
         if self.output.exists() and not self.force:
@@ -56,8 +58,8 @@ class VaultBuilder:
                 f"Output already exists: {self.output}; use --force to replace it"
             )
         logger.info("Discovering pipeline outputs in %s", self.pipeline_output)
-        plan = PipelineOutputDiscovery(self.pipeline_output).discover()
-        if plan["pipeline"] == "metapipeline-ProteomicDDA" and plan["acquisition_mode"] == "TMT":
+        plan = PipelineOutputDiscovery(self.pipeline_output, self.workflow_type).discover()
+        if plan["workflow_type"] == "DDA" and plan["acquisition_mode"] == "TMT":
             if self.tmt_channel_csv is None or not self.tmt_channel_csv.is_file():
                 raise ValueError("DDA TMT builds require --tmt-channel-csv")
             plan["artifacts"].insert(0, dict(
@@ -126,6 +128,7 @@ class VaultBuilder:
                     for key, value in {
                         "format": "ProteoVault",
                         "schema_version": SCHEMA_VERSION,
+                        "workflow_type": plan["workflow_type"],
                         "producer_version": __version__,
                         "duckdb_version": duckdb.__version__,
                         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -141,7 +144,7 @@ class VaultBuilder:
                         root_path=plan["root"],
                     )
                     import_warnings = ImportCoordinator(
-                        database, self.pipeline_output, plan["pipeline"],
+                        database, self.pipeline_output, plan["workflow_type"],
                         plan.get("acquisition_mode"),
                     ).import_artifacts(plan["artifacts"])
                     if import_warnings:
@@ -194,6 +197,7 @@ def add_parser(subparsers: _SubParsersAction[ArgumentParser]) -> None:
         "build", help="Import core quantification, validated PSMs, and protein groups"
     )
     parser.add_argument("--pipeline-output", required=True, type=Path)
+    parser.add_argument("--workflow-type", choices=("DIA", "DDA"))
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument(
         "--fasta",
@@ -230,6 +234,7 @@ def run(args: Namespace) -> int:
         fasta=args.fasta,
         uniprot_idmapping=args.uniprot_idmapping,
         tmt_channel_csv=args.tmt_channel_csv,
+        workflow_type=args.workflow_type,
     )
     result = builder.plan() if args.dry_run else builder.build()
     if args.dry_run:

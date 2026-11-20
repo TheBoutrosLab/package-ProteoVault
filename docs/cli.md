@@ -16,6 +16,11 @@ proteovault build \
     --tmt-channel-csv /path/to/channel.csv \
     --output /path/to/dda.proteovault.duckdb
 
+proteovault build \
+    --pipeline-output /path/to/output/results \
+    --workflow-type DIA \
+    --output /path/to/results.proteovault.duckdb
+
 proteovault add-layer /path/to/results.proteovault.duckdb --layer raw-search
 proteovault add-layer /path/to/results.proteovault.duckdb --layer msbooster
 proteovault add-layer /path/to/results.proteovault.duckdb --layer qc
@@ -35,7 +40,7 @@ with no matching accessions fails the build, because this usually means that
 its identifiers or reference database do not match the search results. Without
 `--fasta`, full protein sequences are available only when supplied by idXML.
 
-The input directory must contain exactly one `metapipeline-ProteomicDIA-VERSION/DATASET/main_workflow` or `metapipeline-ProteomicDDA-VERSION/DATASET/main_workflow` tree, or be the versioned directory itself. DIA requires a published DIA-NN protein-group matrix. DDA requires the published ProteinQuantifier protein and peptide tables, an acquisition manifest (`manifests/qc-mzml.csv` or `manifests/validation-mzml.csv`), and a protein inference artifact. DDA TMT also requires `--tmt-channel-csv` with `plex_id,channel,description` columns; the metapipeline does not publish that input CSV into its result tree. Ambiguous pipeline versions are rejected.
+The input directory must contain exactly one `VERSION/DATASET/main_workflow` tree, or be the versioned directory itself. Use `--workflow-type DIA` or `--workflow-type DDA` to choose the parser independently of the directory name. Without it, ProteoVault detects the type from the existing metapipeline name or the published DIA/DDA artifacts; ambiguous layouts require an explicit type. The resolved type is stored in the vault and reused by `add-layer`, while the pipeline name and version remain provenance. DIA requires a published DIA-NN protein-group matrix. DDA requires the published ProteinQuantifier protein and peptide tables, an acquisition manifest (`manifests/qc-mzml.csv` or `manifests/validation-mzml.csv`), and a protein inference artifact. DDA TMT also requires `--tmt-channel-csv` with `plex_id,channel,description` columns; the metapipeline does not publish that input CSV into its result tree. Ambiguous layouts are rejected.
 
 For TMT, each reporter channel becomes one quantified sample named `<plex_id>|<reporter_label>` (for example `plex_01|126`); the source description remains in `tmt_channels`. The declared plex type in `run.resolved.yaml` supplies the physical reporter order. Reporters omitted from the channel CSV are still registered with an empty description so OpenMS abundance columns retain their correct mapping. `tmt_runs` links each mzML acquisition in the selected manifest to its plex. DDA core imports filtered PSMs by matching their `base_name` to an acquisition run. TMT also imports identified reporter observations from the final `IDConflictResolver.consensusXML` into `precursor_quant`; scan-based observations must match an accepted PSM, while feature-based observations retain their own element and map identities.
 For multi-plex ProteinQuantifier exports, protein abundance columns must identify the plex and reporter channel explicitly, as in `abundance|plex_01|ch1`. Numbered `abundance_sampleN[unknown]` protein columns are rejected because their channel order cannot be verified from the peptide CSV. Use OpenMS ProteinQuantifier's `-file_and_channel_level_output true` option when generating protein quantities, and confirm that its file/channel granularity matches the intended analysis.

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import json
 import logging
 import os
-import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -59,6 +58,9 @@ class VaultLayerAdder:
             row = database.connection.execute(
                 "SELECT dataset_id,pipeline,pipeline_version,root_path FROM analysis"
             ).fetchone()
+            stored_type = database.connection.execute(
+                "SELECT value FROM metadata WHERE key='workflow_type'"
+            ).fetchone()
             known = {
                 (relative, format_name, stage): (size, mtime)
                 for relative, size, mtime, format_name, stage in database.connection.execute(
@@ -70,28 +72,34 @@ class VaultLayerAdder:
                 for (relative, _format, _stage), (size, mtime) in known.items()
             }
         root = self.pipeline_output or Path(row[3])
-        discovery = PipelineOutputDiscovery(root)
-        workflow, _ = discovery.analysis()
-        source_root = (
-            workflow.parents[1]
-            if re.fullmatch(r"metapipeline-ProteomicDIA-[0-9].*", Path(row[3]).name)
-            else workflow.parents[2]
-        )
+        if stored_type:
+            workflow_type = stored_type[0]
+        else:
+            workflow_type = {
+                "metapipeline-ProteomicDIA": "DIA",
+                "metapipeline-ProteomicDDA": "DDA",
+            }.get(row[1])
+        if workflow_type is None:
+            raise ValueError("Vault has no resolved DIA or DDA workflow type")
+        discovery = PipelineOutputDiscovery(root, workflow_type)
+        workflow, analysis = discovery.analysis()
+        if analysis["dataset_id"] != row[0]:
+            raise ValueError("Optional layer belongs to a different dataset")
+        candidates = (workflow.parents[1], workflow.parents[2])
+        scores = [sum((candidate / relative).is_file()
+                      for relative in known_paths) for candidate in candidates]
+        if max(scores) == 0:
+            raise ValueError("Cannot match stored source paths to the pipeline output")
+        source_root = candidates[scores.index(max(scores))]
         artifacts = []
         skipped = []
         acquisition_mode = None
         for layer in self.layers:
             discovered = discovery.discover(layer=layer)
             acquisition_mode = discovered.get("acquisition_mode")
-            if (
-                tuple(
-                    discovered[key]
-                    for key in ("dataset_id", "pipeline", "pipeline_version")
-                )
-                != row[:3]
-            ):
+            if discovered["dataset_id"] != row[0] or discovered["workflow_type"] != workflow_type:
                 raise ValueError(
-                    "Optional layer belongs to a different dataset or pipeline version"
+                    "Optional layer belongs to a different dataset or workflow type"
                 )
             for artifact in discovered["artifacts"]:
                 path = Path(artifact["path"])
@@ -115,7 +123,7 @@ class VaultLayerAdder:
         return dict(
             database=str(self.database),
             root=str(source_root),
-            pipeline=row[1],
+            workflow_type=workflow_type,
             acquisition_mode=acquisition_mode,
             layers=self.layers,
             artifacts=artifacts,
@@ -153,7 +161,7 @@ class VaultLayerAdder:
                 database.connection.execute("BEGIN TRANSACTION")
                 try:
                     import_warnings = ImportCoordinator(
-                        database, plan["root"], plan["pipeline"],
+                        database, plan["root"], plan["workflow_type"],
                         plan["acquisition_mode"],
                     ).import_artifacts(plan["artifacts"])
                     if import_warnings:

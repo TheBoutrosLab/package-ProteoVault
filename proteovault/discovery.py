@@ -9,40 +9,56 @@ class PipelineOutputDiscovery:
 
     LAYERS = ("core", "raw-search", "msbooster", "qc")
 
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, workflow_type: str | None = None):
         self.root = Path(root).expanduser().resolve()
+        if workflow_type not in (None, "DIA", "DDA"):
+            raise ValueError("workflow_type must be DIA or DDA")
+        self.workflow_type = workflow_type
 
     def analysis(self) -> tuple[Path, dict]:
         if not self.root.is_dir():
             raise FileNotFoundError(
                 f"Pipeline output directory does not exist: {self.root}"
             )
-        pattern = r"metapipeline-Proteomic(?:DIA|DDA)-[0-9].*"
-        if re.fullmatch(pattern, self.root.name):
-            candidates = [self.root]
-        else:
-            candidates = sorted(
-                p for p in self.root.glob("metapipeline-ProteomicD*-*")
-                if p.is_dir() and re.fullmatch(pattern, p.name)
-            )
-        if len(candidates) != 1:
+        named_versions = [
+            path for path in self.root.iterdir() if path.is_dir() and
+            re.fullmatch(r"metapipeline-ProteomicD(?:IA|DA)-[0-9].*", path.name)
+        ]
+        if len(named_versions) > 1:
             raise ValueError(
-                f"Expected one DDA or DIA metapipeline version under {self.root}; found {len(candidates)}"
+                f"Expected one metapipeline version under {self.root}; "
+                f"found {len(named_versions)}"
             )
-        version_root = candidates[0]
-        workflows = sorted(version_root.glob("*/main_workflow"))
+        workflows = sorted({*self.root.glob("*/main_workflow"),
+                            *self.root.glob("*/*/main_workflow")})
         if len(workflows) != 1:
             raise ValueError(
-                f"Expected one dataset/main_workflow under {version_root}; found {len(workflows)}"
+                f"Expected one dataset/main_workflow under {self.root}; found {len(workflows)}"
             )
         workflow = workflows[0]
-        match = re.fullmatch(r"(metapipeline-ProteomicD(?:IA|DA))-(.+)", version_root.name)
-        assert match is not None
-        pipeline, version = match.groups()
+        version_root = workflow.parents[1]
+        match = re.fullmatch(r"(.+)-([0-9][^/]*)", version_root.name)
+        pipeline, version = match.groups() if match else (version_root.name, None)
+        workflow_type = self.workflow_type
+        if workflow_type is None:
+            if pipeline == "metapipeline-ProteomicDIA":
+                workflow_type = "DIA"
+            elif pipeline == "metapipeline-ProteomicDDA":
+                workflow_type = "DDA"
+            else:
+                dia = bool(list(workflow.glob("quantitate-ProteomicDIA-*")))
+                dda = bool(list(workflow.glob("quantitate-ProteomicProtein-*")))
+                if dia == dda:
+                    raise ValueError(
+                        f"Cannot detect DIA or DDA unambiguously in {workflow}; "
+                        "pass --workflow-type DIA or DDA"
+                    )
+                workflow_type = "DIA" if dia else "DDA"
         return workflow, dict(
             dataset_id=workflow.parent.name,
             pipeline=pipeline,
             pipeline_version=version,
+            workflow_type=workflow_type,
             root=str(self.root),
         )
 
@@ -50,7 +66,7 @@ class PipelineOutputDiscovery:
         if layer not in self.LAYERS:
             raise ValueError(f"Unknown layer: {layer}")
         workflow, analysis = self.analysis()
-        if analysis["pipeline"] == "metapipeline-ProteomicDDA":
+        if analysis["workflow_type"] == "DDA":
             return self.discover_dda(workflow, analysis, layer)
         artifacts = []
         warnings = []

@@ -9,7 +9,67 @@ import pytest
 
 from proteovault import VaultBuilder, VaultLayerAdder
 from proteovault.cli.main import main
-from test_dda_build import dda_output
+
+
+def dda_output(tmp_path, mode):
+    """Create the published DDA artifacts needed to exercise workflow routing."""
+    root = tmp_path / "metapipeline-ProteomicDDA"
+    workflow = root / "metapipeline-ProteomicDDA-1.0.0/TEST/main_workflow"
+    manifest = workflow / "manifests/qc-mzml.csv"
+    manifest.parent.mkdir(parents=True)
+    if mode == "TMT":
+        manifest.write_text(
+            "sample_name,fraction_id,path\n"
+            "plex_01,1,/data/fraction_1.mzML\n"
+            "plex_01,2,/data/fraction_2.mzML\n"
+        )
+        (workflow / "quantitate-ProteomicTMT-1.0.0").mkdir()
+        comments = (
+            "# Files/samples associated with abundance values below: "
+            "1: 'plex_01' ('tmt10plex_126'), "
+            "2: 'plex_01' ('tmt10plex_127N')\n"
+        )
+    else:
+        manifest.write_text(
+            "sample_name,fraction_id,path\n"
+            "S1,1,/data/S1.mzML\nS1,2,/data/S1_f2.mzML\n"
+            "S2,1,/data/S2.mzML\n"
+        )
+        comments = (
+            "# Files/samples associated with abundance values below: "
+            "1: 'S1', 2: 'S2'\n"
+        )
+    output = (workflow / "quantitate-ProteomicProtein-1.0.0/TEST/"
+              "OpenMS-3.5.0/output")
+    output.mkdir(parents=True)
+    (output / "TEST_ProteinQuantifier_protein.csv").write_text(
+        comments + '"protein"\t"n_proteins"\t"protein_score"\t'
+        '"n_peptides"\t"abundance_1"\t"abundance_2"\n'
+        '"P1/P2"\t2\t0.9\t1\t100\t200\n'
+    )
+    (output / "TEST_ProteinQuantifier_peptide.csv").write_text(
+        comments + '"peptide"\t"protein"\t"n_proteins"\t"charge"\t'
+        '"abundance_1"\t"abundance_2"\t"fraction"\n'
+        '"PEPTIDE(TMTpro)"\t"P1/P2"\t2\t0\t10\t20\t"all"\n'
+    )
+    source = (Path(__file__).parents[1] / "fixtures" /
+              "metapipeline-ProteomicDIA-UniProtRP_ProteinProphet" /
+              "metapipeline-ProteomicDIA-1.3.0/TEST/main_workflow" /
+              "validate-ProteomicPSM-2.2.0/TEST/ProteinProphet/output" /
+              "TEST-ProteinProphet.idXML")
+    shutil.copyfile(source, output / "TEST_ProteinProphet_filtered.idXML")
+    qc = workflow / "qc-ProteomicDDA-1.0.0/TEST/output/TEST_QC_metrics.tsv"
+    qc.parent.mkdir(parents=True)
+    qc_sample = "plex_01" if mode == "TMT" else "S1"
+    qc.write_text(
+        "dataset_id\tlayer\tsource_process\tsample_name\tsearch_engine\t"
+        "fraction_id\tmetric_name\tgroup\tvalue\tunit\tstatus\tsource_file\n"
+        f"TEST\tacquisition\tsummarize_mzML\t{qc_sample}\t\t1\t"
+        "ms2_count\tall\t100\tcount\tavailable\tfraction_1.mzML\n"
+        f"TEST\tacquisition\tsummarize_mzML\t{qc_sample}\t\t2\t"
+        "ms2_count\treference\t120\tcount\tavailable\tfraction_2.mzML\n"
+    )
+    return root
 
 
 def snapshot(path):
